@@ -13,6 +13,7 @@
 #include <random>       // std::default_random_engine
 #include <map>
 #include <sstream>
+#include <cstdlib>
 
 //#include <opencv2/imgproc.hpp>
 using namespace std;
@@ -42,11 +43,15 @@ void GraphTSP::FindTSPConcorde(vector< vector< int >  > & matrix, //the graph
 #endif
 
   const string path_to_solver = "./tsp/concorde/concorde" + binary_posfix;
+  const int max_failed_attempts=500;
+  int failed_attempts=0;
 
   for (int i = 0; i < 100 * max_paths; ++i)
   {
 
-    const string clock_str = std::to_string(clock());
+    if(failed_attempts>=max_failed_attempts) break;
+
+    const string clock_str = std::to_string(std::rand()); //clock());
     const string solution_path = "tsp_solution_" + clock_str + ".txt";
     const string init_upper_bound = std::to_string(matrix.size());
 
@@ -113,12 +118,14 @@ void GraphTSP::FindTSPConcorde(vector< vector< int >  > & matrix, //the graph
     std::remove(solution_path.c_str());
 
     if(found) {
-      cout<<"found duplicates: "<<ps<<endl;
+      cout<<"- found duplicates: "<<ps<<endl;
+      failed_attempts++;
       continue; //duplicated path
     }
 
     paths.push_back(path);
     path_strings.push_back(ps);
+    failed_attempts=0;
 
     if (paths.size() >= max_paths)
       break;

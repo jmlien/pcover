@@ -51,6 +51,7 @@ bool MyScene::create( std::istream & inputfile)
   int pcover_grid_width=10, pcover_grid_height=10;
   string pcover_method;
   float battery=0, charging_time=0, latency=0;
+  int seed=0;
 
   MyTexture * backdrop_texture=NULL;
 
@@ -123,6 +124,12 @@ bool MyScene::create( std::istream & inputfile)
       }
 
       this->m_terrain = pixels; //remember it as the terrain
+    }
+    else if(backdropName=="seed")
+    {
+      inputfile >>seed;
+      std::srand(seed);
+      srand48(seed);
     }
     else if(backdropName=="method")
     {

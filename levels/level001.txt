@@ -1,6 +1,7 @@
 40 40
+seed 0
 perlin 3 3 cubic 1 0.1 blend imgs/rock.jpeg imgs/water.jpeg
-method tsp_lp
+method tsp_greedy
 regions 10 10
 battery  5000
 charging 11000
@@ -12,7 +13,7 @@ t imgs/tower.png 0.0 0.5
 w imgs/brick.png 0.0 0.2
 
 Characters
-z imgs/zombie.png 0.05 
+z imgs/zombie.png 0.05
 k imgs/chicken.png  0.1
 d imgs/dragon.png 0.08
 
@@ -58,4 +59,3 @@ oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
-

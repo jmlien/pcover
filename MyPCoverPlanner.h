@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MyScene.h"
+#include <set>
 
 namespace GMUCS425
 {
@@ -52,7 +53,7 @@ public:
   {
     MySchedule(){ duration=0; chicken_needed=1; }
 
-    list<Node *> nodes;
+    set<Node *> nodes;
     float duration;
     int chicken_needed;
   };
@@ -105,8 +106,8 @@ public:
 protected:
 
   //schedulers
-  bool schedule_tsp_segments_lp(); //return false if failed
-  void schedule_tsp_segments_greedy();
+  bool schedule_tsp_segments_lp(int trials); //return false if failed
+  void schedule_tsp_segments_greedy(int trials);
 
   //return true if m_agent collide with a non-movable object
   //at a given location

@@ -24,7 +24,7 @@ class MyPerlin
 
 			//Initialize
 			using namespace mathtool;
-			srand48(time(NULL));
+			//srand48(time(NULL));
 			mGradients=std::vector< std::vector<Vector2d> >(height, std::vector<mathtool::Vector2d>(width, Vector2d()) );
 			for(auto & row : mGradients)
 				for(auto& v : row)
