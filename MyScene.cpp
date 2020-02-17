@@ -302,6 +302,10 @@ bool MyScene::create( std::istream & inputfile)
   }
   objs.clear(); // calls their destructors if there are any. (not good enough)
 
+  //seed again...
+  std::srand(seed);
+  srand48(seed);
+  
   //done!
   return true;
 }

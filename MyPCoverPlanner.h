@@ -10,6 +10,7 @@ class MyDragonAgent;
 
 class MyPCoverPlanner
 {
+
 protected:
 
   typedef mathtool::Point2d Point2d;
@@ -47,16 +48,18 @@ protected:
 
 public:
 
-  //struct Node;
-
   struct MySchedule : public list<Point2d>
   {
     MySchedule(){ duration=0; chicken_needed=1; }
 
-    set<Node *> nodes;
+    //set<Node *> nodes;
+    list<Node *> nodes;
     float duration;
     int chicken_needed;
   };
+
+
+  ///--------------------------------------------------
 
   MyPCoverPlanner
   (MyScene * scene, MyDragonAgent * agent, int W, int H,
@@ -71,6 +74,7 @@ public:
     m_charging=charging;
     m_charging_station=NULL;
     m_opt_method=method;
+    m_num_valid_cells=-1;
   }
 
   virtual ~MyPCoverPlanner(){
@@ -107,7 +111,9 @@ protected:
 
   //schedulers
   bool schedule_tsp_segments_lp(int trials); //return false if failed
+  bool schedule_tsp_segments_lp2(int trials);//return false if failed
   void schedule_tsp_segments_greedy(int trials);
+  void schedule_shorest_paths_lp(); //
 
   //return true if m_agent collide with a non-movable object
   //at a given location
@@ -126,7 +132,7 @@ protected:
   float dist2time(float dist);
 
   //nodes visited by the given path
-  list<Node *> visitedNodes(const list<Point2d>& path);
+  list<Node *> visitedNodes(const list<Point2d>& path, float arrival_time);
 
   //check if the schedule time is valid
   //bool isvalid(MySchedule& s, Node * new_n);
@@ -150,9 +156,17 @@ protected:
 
   //generate constranits
   void generate_constraints( const vector<MySchedule>& schedules,  list<LP_constraints>& constraints);
-  bool SolveLP(vector<MySchedule>& schdules,
+
+  //find the optimal subset of schdules
+  //return the total number of chickens needed
+  int SolveLP(vector<MySchedule>& schedules, vector<MySchedule>& opt);
+
+  //solve LP problem from the given schedule and constraints
+  //called by "int SolveLP" and return true is optimal solution is found
+  bool SolveLP(vector<MySchedule>& schedules,
               list<LP_constraints>& constaints,
               vector<float>& solution);
+
 
   //compute a matrix represention of the graph
   typedef vector< pair<Node *, float> > TSP;
@@ -174,6 +188,7 @@ protected:
   MyDragonAgent * m_agent;
   MyScene * m_scene;
   int m_width, m_height; //width and height of the grid
+  int m_num_valid_cells; //number of valid cells
   float m_latency; //the latency constraint, in milliseconds
   float m_battery; //the battery constraint, in milliseconds
   float m_charging; //the charging constraint, in milliseconds

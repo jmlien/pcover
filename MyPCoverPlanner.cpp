@@ -104,33 +104,6 @@ bool MyPCoverPlanner::build() //build a grid or graph
   return true;
 }
 
-//compute path from each node to the charging station
-bool MyPCoverPlanner::paths2station()
-{
-  //brute force.... this can be done much more efficient
-  for(int i=0;i<m_height;i++)
-  {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
-      if(!n.free) continue; //this node is in collision, no neighbors
-      if(&n==m_charging_station) continue;
-      n.dist2station=m_agent->pathing(m_charging_station->pos, n.pos, n.path2station);
-      n.time2station = dist2time(n.dist2station);
-      if(n.time2station>m_latency){
-        cerr<<"! Error: shortest time to station ("<<n.time2station<<") is greater than the latency ("<<m_latency<<")"<<endl;
-        return false;
-      }
-      if(n.time2station>m_battery/2){
-        cerr<<"! Error: Insufficient battery power ("<<m_battery<<") to safely reach and return from some areas ("<<n.time2station<<")"<<endl;
-        return false;
-      }
-    }
-  }//end j
-
-  return true;//everything looks good!
-}
-
 // //check if the schedule with the new duration would be valid
 // bool MyPCoverPlanner::isvalid(MySchedule& s, Node * new_n)
 // {
@@ -156,13 +129,18 @@ bool MyPCoverPlanner::schedule( const Point2d& start )
 
   //compute path to charging station
   cout<<"- Compute all paths from charging station"<<endl;
+  m_num_valid_cells=-1;
   if( paths2station()==false ) return false;
 
   //schedule!
   if(m_opt_method=="tsp_greedy")
-    schedule_tsp_segments_greedy(50);
+    schedule_tsp_segments_greedy(20);
   else if(m_opt_method=="tsp_lp")
-    schedule_tsp_segments_lp(50);
+    schedule_tsp_segments_lp(20);
+  else if(m_opt_method=="tsp_lp2")
+    schedule_tsp_segments_lp2(20);
+  else if(m_opt_method=="shorst_lp")
+    schedule_shorest_paths_lp();
   else{
     cerr<<"! Error: Unknown pcover optimization method: "<<m_opt_method<<endl;
     return false;
@@ -170,6 +148,43 @@ bool MyPCoverPlanner::schedule( const Point2d& start )
 
   //
   return true;
+}
+
+void MyPCoverPlanner::schedule_shorest_paths_lp()
+{
+  vector<MySchedule> schedules;
+  for(int i=0;i<m_height;i++)
+  {
+    for(int j=0;j<m_width;j++)
+    {
+      Node & n=m_grid[i][j];
+      if(!n.free) continue; //this node is in collision, no neighbors
+      //cout<<"n id="<<n.id<<" time to station="<<n.time2station<<endl;
+      MySchedule schedule;
+      const auto & path=n.path2station;
+      schedule.insert(schedule.end(), path.begin(), path.end() );
+      schedule.insert(schedule.end(), path.rbegin(), path.rend() );
+      schedule.nodes=visitedNodes(schedule,0);
+
+      // cout<<"nodes:";
+      // for(auto n : schedule.nodes) cout<<n->id<<",";
+      // cout<<endl;
+
+      //schedule.nodes.push_back(&n);
+      schedule.duration=n.time2station*2;
+
+      schedule.chicken_needed=(int)ceil((schedule.duration+m_charging)*1.0f/m_latency);
+
+      // cout<<"schedule.chicken_needed="<<schedule.chicken_needed<<endl;
+      // cout<<"schedule size="<<schedule.nodes.size()<<endl;
+
+      schedules.push_back(schedule);
+    }
+  }
+
+  //find optimal subset
+  int total_chickens_needed=SolveLP(schedules, m_schedules);
+  cout<<"- Best schedule needs "<<total_chickens_needed<<" chickens and "<<m_schedules.size()<<" tours"<<endl;
 }
 
 bool MyPCoverPlanner::schedule_tsp_segments_lp(int trials)
@@ -187,9 +202,9 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp(int trials)
   {
     TSP& tour=tours[i];
     //int total_chickens_needed=0;
-
     vector<MySchedule> schedules;
     m_schedules.clear();
+
     //break TSP into segments
     for(auto it=tour.begin(); it!=tour.end(); it++)
     {
@@ -199,28 +214,38 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp(int trials)
         //schedules.push_back(schedule);
     }//end for tour
 
-
-
     //build constraints
+    /*
     list<LP_constraints> constraints;
     vector<float> solution; //0/1
     int total_chickens_needed=0;
     generate_constraints(schedules, constraints);
 
+    if(tour.size()!=constraints.size())
+    {
+      cerr<<"! Error: LP constraint size inconsistent"<<endl;
+      exit(1);
+    }
+
     //cout<<"constraints size="<<constraints.size()<<endl;
     if( SolveLP(schedules, constraints, solution) )
     {
       int size=solution.size();
+      //cout<<"solution=";
       for(int i=0;i<size;i++){
-        if(solution[i]!=0){
+        if(solution[i]>0.5){
+          //cout<<i<<",";
           m_schedules.push_back(schedules[i]);
           total_chickens_needed+=schedules[i].chicken_needed;
         }
       }//end for i
+      //cout<<endl;
     }
     else continue;
-
+    */
+    int total_chickens_needed=SolveLP(schedules,m_schedules);
     //check if this schedule is better
+    cout<<"trial #"<<i<<" needs "<<total_chickens_needed<<" chickens"<<endl;
     if(total_chickens_needed<min_chickens_needed)
     {
       min_chickens_needed=total_chickens_needed;
@@ -237,6 +262,61 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp(int trials)
   return true;
 
 }//end MyPCoverPlanner
+
+bool MyPCoverPlanner::schedule_tsp_segments_lp2(int trials)
+{
+  //
+  vector<TSP> tours;
+  tsp(m_charging_station,tours,trials);
+  vector<MySchedule> schedules;
+
+  for(int i=0;i<tours.size();i++)
+  {
+    TSP& tour=tours[i];
+    //break TSP into segments
+    for(auto it=tour.begin(); it!=tour.end(); it++)
+    {
+        build_valid_schedule_from_tsp(tour, it, schedules);
+    }//end for tour
+  }
+
+
+  //build constraints
+  /*
+  list<LP_constraints> constraints;
+  vector<float> solution; //0/1
+  int total_chickens_needed=0;
+  generate_constraints(schedules, constraints);
+  if(tours.front().size()!=constraints.size())
+  {
+    cerr<<"! Error: LP constraint size inconsistent"<<endl;
+    exit(1);
+  }
+
+  //cout<<"constraints size="<<constraints.size()<<endl;
+  //cout<<"schedules size="<<schedules.size()<<endl;
+  if( SolveLP(schedules, constraints, solution) )
+  {
+    int size=solution.size();
+    for(int i=0;i<size;i++){
+      if(solution[i]!=0){
+        m_schedules.push_back(schedules[i]);
+        total_chickens_needed+=schedules[i].chicken_needed;
+      }
+    }//end for i
+  }
+  else  //failed...no LP solved
+    return false;
+  */
+
+  int total_chickens_needed=SolveLP(schedules,m_schedules);
+
+  cout<<"- Best schedule needs "<<total_chickens_needed
+      <<" chickens and "<<m_schedules.size()<<" tours"<<endl;
+
+  return true;
+}//end MyPCoverPlanner
+
 
 void MyPCoverPlanner::schedule_tsp_segments_greedy(int trials)
 {
@@ -261,6 +341,12 @@ void MyPCoverPlanner::schedule_tsp_segments_greedy(int trials)
       it=build_valid_schedule_from_tsp(tour, it, schedule);
       total_chickens_needed+=schedule.chicken_needed;
       m_schedules.push_back(schedule);
+      // cout<<"schedule=";
+      // for(Node * n : schedule.nodes)
+      // {
+      //   cout<<n->id<<"->";
+      // }
+      // cout<<" cost="<<schedule.chicken_needed<<endl;
     }//end for tour
 
     cout<<"trial #"<<i<<" needs "<<total_chickens_needed<<" chickens"<<endl;
@@ -283,18 +369,14 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
  MySchedule& schedule)
 {
     auto it=start; //the start of the schedule
-
     //first station must be charging station
     if(it->first!=m_charging_station)
     {
       schedule.insert(schedule.end(), it->first->path2station.begin(), it->first->path2station.end() );
-      list<Node *> nodes=visitedNodes(it->first->path2station);
-      schedule.nodes.insert(nodes.begin(),nodes.end());
     }
     else
     {
       schedule.push_back(it->first->pos);
-      schedule.nodes.insert(it->first);
     }
 
     schedule.duration=it->first->time2station*2; //round trip
@@ -303,15 +385,15 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
 
     while( next!=tour.end() )
     {
+      //schedule.nodes.insert(it->first);
+      schedule.nodes.push_back(it->first);
       float new_arrival=schedule.duration-it->first->time2station+it->second;
       float new_duration=new_arrival+next->first->time2station;
       if(new_arrival>m_latency) break; //arrived after latency
       if(new_duration>this->m_battery+11) break; //out of battery
       //if(new_duration+m_charging>m_latency) break; //
-
       //cout<<"it->first->pos="<<it->first->pos<<endl;
       schedule.push_back(next->first->pos);
-      schedule.nodes.insert(next->first);
       schedule.duration=new_duration;
       it=next;
       next++;
@@ -321,15 +403,9 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
     //given the schedule.duration determine how many chickens are needed
     //schedule.chicken_needed=(int)ceil(lcm( (int)(schedule.duration+m_charging), (int)m_latency)*1.0f/m_latency);
     schedule.insert(schedule.end(), it->first->path2station.rbegin(), it->first->path2station.rend() );
-    //list<Node *> nodes=visitedNodes(it->first->path2station);
-    //schedule.nodes.insert(schedule.nodes.end(),nodes.begin(),nodes.end());
-    // {//clean up a bit
-    //   set<Node*> tmp(schedule.nodes.begin(),schedule.nodes.end());
-    //   schedule.nodes=list<Node*>(tmp.begin(),tmp.end());
-    // }
     schedule.chicken_needed=(int)ceil((schedule.duration+m_charging)*1.0f/m_latency);
 
-    cout<<"schedule size="<<schedule.nodes.size()<<endl;
+    //cout<<"schedule size="<<schedule.nodes.size()<<endl;
     return it;
 }
 
@@ -342,18 +418,23 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
 {
     auto it=start; //the start of the schedule
     MySchedule schedule;
+    float arrival=it->first->time2station; //arrival time
 
     //first station must be charging station
     if(it->first!=m_charging_station)
     {
-      schedule.insert(schedule.end(), it->first->path2station.begin(), it->first->path2station.end() );
-      list<Node *> nodes=visitedNodes(it->first->path2station);
-      schedule.nodes.insert(nodes.begin(),nodes.end());
+      auto & path=it->first->path2station;
+      schedule.insert(schedule.end(), path.begin(), path.end() );
+      list<Node *> nodes=visitedNodes(path,0);
+      //schedule.nodes.insert(nodes.begin(),nodes.end());
+      schedule.nodes.insert(schedule.nodes.end(),nodes.begin(),nodes.end());
+      schedule.nodes.push_back(it->first);
     }
     else
     {
       schedule.push_back(it->first->pos);
-      schedule.nodes.insert(it->first);
+      //schedule.nodes.insert(it->first);
+      schedule.nodes.push_back(it->first);
     }
 
     schedule.duration=it->first->time2station*2; //round trip
@@ -363,7 +444,11 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
 
     while( next!=tour.end() )
     {
-      float new_arrival=schedule.duration-it->first->time2station+it->second;
+      if(arrival!=schedule.duration-it->first->time2station)
+      {
+        cerr<<"! WRONG!!!! arrival="<<arrival<<" but="<<schedule.duration-it->first->time2station<<endl;
+      }
+      float new_arrival=arrival+it->second;
       float new_duration=new_arrival+next->first->time2station;
       if(new_arrival>m_latency) break; //arrived after latency
       if(new_duration>this->m_battery+11) break; //out of battery
@@ -372,22 +457,26 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
       int new_chicken_needed=(int)ceil((schedule.duration+m_charging)*1.0f/m_latency);
       if(new_chicken_needed>schedule.chicken_needed)
       {
-        cout<<"!!!!!!! new_chicken_needed="<<new_chicken_needed<<" old="<<schedule.chicken_needed<<endl;
         MySchedule tmp=schedule;
-        tmp.insert(tmp.end(), it->first->path2station.rbegin(), it->first->path2station.rend() );
-        // {//clean up a bit
-        //   set<Node*> nodes(tmp.nodes.begin(),tmp.nodes.end());
-        //   tmp.nodes=list<Node*>(nodes.begin(),nodes.end());
-        // }
-        schedules.push_back(tmp);
+        //path back to the station
+        auto path=it->first->path2station;
+        tmp.insert(tmp.end(),path.rbegin(),path.rend());
+        /*path.reverse();
+        list<Node *> nodes=visitedNodes(path,arrival);
+        tmp.nodes.insert(nodes.begin(),nodes.end());*/
+
+        //schedules.push_back(tmp);
+
         //cout<<"schedule.chicken_needed="<<schedule.chicken_needed<<endl;
         schedule.chicken_needed=new_chicken_needed;
       }
 
       //cout<<"it->first->pos="<<it->first->pos<<endl;
       schedule.push_back(next->first->pos);
-      schedule.nodes.insert(next->first);
+      //schedule.nodes.insert(next->first);
+      schedule.nodes.push_back(next->first);
       schedule.duration=new_duration;
+      arrival=new_arrival;
       it=next;
       next++;
     }//end while
@@ -395,7 +484,13 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
     //cout<<"schedule.duration="<<schedule.duration<<" batter="<<m_battery<<endl;
     //given the schedule.duration determine how many chickens are needed
     //schedule.chicken_needed=(int)ceil(lcm( (int)(schedule.duration+m_charging), (int)m_latency)*1.0f/m_latency);
-    schedule.insert(schedule.end(), it->first->path2station.rbegin(), it->first->path2station.rend() );
+    auto path=it->first->path2station;
+    //path.pop_front();
+    schedule.insert(schedule.end(), path.rbegin(), path.rend() );
+    path.reverse();
+    list<Node *> nodes=visitedNodes(path,arrival);
+    //schedule.nodes.insert(nodes.begin(),nodes.end());
+    schedule.nodes.insert(schedule.nodes.end(),nodes.begin(),nodes.end());
 
     // {//clean up a bit
     //   set<Node*> tmp(schedule.nodes.begin(),schedule.nodes.end());
@@ -503,6 +598,7 @@ tsp(const vector<Node *>& subg, Node * start,
   for(int i=0;i<paths.size();i++)
   {
     list< pair<Node *, float> > tsp;
+    //cout<<"->";
     for(auto& n : paths[i])
     {
       //cout<<n.first<<", ";
@@ -539,18 +635,17 @@ tsp(MyPCoverPlanner::Node * start,vector<MyPCoverPlanner::TSP>& TSPs, int number
   return tsp(all_nodes,start,TSPs,number);
 }
 
-
 //generate constranits
 void MyPCoverPlanner::generate_constraints( const vector<MySchedule>& schedules,  list<LP_constraints>& constraints)
 {
-  map< Node *, vector<int> > node2schdules; //which schedules go through each node
+  map< Node *, set<int> > node2schdules; //which schedules go through each node
   int size=schedules.size();
   for( int i=0;i<size;i++ )
   {
     const MySchedule & schedule=schedules[i];
     for(Node * node : schedule.nodes )
     {
-      node2schdules[node].push_back(i);
+      node2schdules[node].insert(i);
     }
   }//end for
 
@@ -558,15 +653,13 @@ void MyPCoverPlanner::generate_constraints( const vector<MySchedule>& schedules,
   for(auto & cons : node2schdules)
   {
     LP_constraints lpc;
-    lpc.vids=cons.second;
+    lpc.vids=vector<int>(cons.second.begin(),cons.second.end());
     lpc.type=GLP_LO;
     lpc.lower_bound=1;
     constraints.push_back(lpc);
   }
 
 }
-
-
 
 bool MyPCoverPlanner::SolveLP(
   vector<MySchedule>& schdules,
@@ -651,7 +744,7 @@ bool MyPCoverPlanner::SolveLP(
 	//parm.cb_func = callback;
 	parm.cb_info = this;
 
-	parm.tm_lim = 600000; //600 sec
+	parm.tm_lim = 60000; //60 sec
 	int err = glp_intopt(lp, &parm);
 	//cout << "err=" << err << endl;
 
@@ -662,6 +755,7 @@ bool MyPCoverPlanner::SolveLP(
 	//get mip status
 	int glp_prim_stat = glp_mip_status(lp);
 
+/*
 	switch (glp_prim_stat)
 	{
 	case GLP_OPT: cout << "solution is optimal;" << endl; break;
@@ -671,6 +765,7 @@ bool MyPCoverPlanner::SolveLP(
 	case GLP_UNBND: cout << "problem has unbounded solution;" << endl; break;
 	case GLP_UNDEF: cout << "solution is undefined." << endl; break;
 	}
+*/
 
 	bool solution_found = glp_prim_stat == GLP_OPT || glp_prim_stat == GLP_FEAS;
 
@@ -692,7 +787,79 @@ bool MyPCoverPlanner::SolveLP(
 }
 
 
+int MyPCoverPlanner::SolveLP(vector<MySchedule>& schedules, vector<MySchedule>& opt)
+{
+    //build constraints
+    list<LP_constraints> constraints;
+    vector<float> solution; //0/1
+    int total_chickens_needed=0;
+    generate_constraints(schedules, constraints);
 
+    if(this->m_num_valid_cells<=0)
+    {
+      cerr<<"! Error: Number of valid cells="
+          <<this->m_num_valid_cells<<endl;
+      exit(1);
+    }
+
+    if(m_num_valid_cells!=constraints.size())
+    {
+      cerr<<"! Error: LP constraint size inconsistent;"
+          <<" expect "<<m_num_valid_cells<<", get "<<constraints.size()<<endl;
+      exit(1);
+    }
+
+    //cout<<"constraints size="<<constraints.size()<<endl;
+    //cout<<"schedules size="<<schedules.size()<<endl;
+    if( SolveLP(schedules, constraints, solution) )
+    {
+      int size=solution.size();
+      for(int i=0;i<size;i++){
+        if(solution[i]!=0){
+          opt.push_back(schedules[i]);
+          total_chickens_needed+=schedules[i].chicken_needed;
+        }
+      }//end for i
+    }
+    else  //failed...no LP solved
+      return -1;
+
+    // cout<<"- Best schedule needs "<<total_chickens_needed
+    //     <<" chickens and "<<m_schedules.size()<<" tours"<<endl;
+
+    return total_chickens_needed;
+}
+
+
+//compute path from each node to the charging station
+bool MyPCoverPlanner::paths2station()
+{
+  //brute force.... this can be done much more efficient
+  this->m_num_valid_cells=0;
+  for(int i=0;i<m_height;i++)
+  {
+    for(int j=0;j<m_width;j++)
+    {
+      Node & n=m_grid[i][j];
+      if(!n.free) continue; //this node is in collision, no neighbors
+      this->m_num_valid_cells++;
+
+      if(&n==m_charging_station) continue;
+      n.dist2station=m_agent->pathing(m_charging_station->pos, n.pos, n.path2station);
+      n.time2station = dist2time(n.dist2station);
+      if(n.time2station>m_latency){
+        cerr<<"! Error: shortest time to station ("<<n.time2station<<") is greater than the latency ("<<m_latency<<")"<<endl;
+        return false;
+      }
+      if(n.time2station>m_battery/2){
+        cerr<<"! Error: Insufficient battery power ("<<m_battery<<") to safely reach and return from some areas ("<<n.time2station<<")"<<endl;
+        return false;
+      }
+    }
+  }//end j
+
+  return true;//everything looks good!
+}
 
 void MyPCoverPlanner::display()
 {
@@ -766,7 +933,6 @@ void MyPCoverPlanner::display()
 
       }
     }
-
 }
 
 MyPCoverPlanner::Node * MyPCoverPlanner::getNode(float x, float y)
@@ -777,12 +943,19 @@ MyPCoverPlanner::Node * MyPCoverPlanner::getNode(float x, float y)
 }
 
 list<MyPCoverPlanner::Node *>
-MyPCoverPlanner::visitedNodes(const list<Point2d>& path)
+MyPCoverPlanner::visitedNodes(const list<Point2d>& path, float arrival_time)
 {
   list<MyPCoverPlanner::Node *> nodes;
+  Point2d pre=path.front();
+  float travel_time=arrival_time;
+
   for(const Point2d& pos : path)
   {
+    travel_time+=(pos-pre).norm();
+    if(travel_time>this->m_latency) break; //visited after latency expires...
     Node * n = getNode(pos[0],pos[1]);
+    pre=pos;
+    if(!n->free) continue;
     if(nodes.empty()) nodes.push_back(n);
     else if(nodes.back()!=n) nodes.push_back(n);
   }
