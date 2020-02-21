@@ -311,19 +311,25 @@ namespace GMUCS425
       pcover->display();
     }
 
+//return;
+
     SDL_Renderer * renderer=getMyGame()->getRenderer();
     const vector<MyPCoverPlanner::MySchedule>& schdules = pcover->getSchedules();
-    //draw path
-    SDL_SetRenderDrawColor(renderer,200,0,0,100);
-    auto & waypt=schdules.front().front();
-    SDL_RenderDrawLine(renderer, x, y, waypt[0], waypt[1]);
-    for(auto i = schdules.front().begin();i!=schdules.front().end();i++)
-    {
-      auto j=i; j++;
-      if(j==schdules.front().end()) continue;
-      SDL_RenderDrawLine(renderer, (*i)[0], (*i)[1], (*j)[0], (*j)[1]);
-    }//end i
 
+    //draw path in schedules
+    SDL_SetRenderDrawColor(renderer,200,0,0,100);
+    for(auto& schdule : schdules)
+    {
+      //auto & waypt=schdule.front();
+      //SDL_RenderDrawLine(renderer, x, y, waypt[0], waypt[1]);
+      for(auto i = schdule.begin();i!=schdule.end();i++)
+      {
+        auto j=i; j++;
+        if(j==schdule.end()) continue;
+        SDL_RenderDrawLine(renderer, (*i)[0], (*i)[1], (*j)[0], (*j)[1]);
+      }//end i
+
+    }//end for schdule
 
     //MyAgent::display();
     if(!this->visible) return; //not visible...

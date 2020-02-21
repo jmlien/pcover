@@ -131,7 +131,7 @@ void GraphTSP::FindTSPConcorde(vector< vector< int >  > & matrix, //the graph
       break;
   }
 
-  std::remove(tsp_file_path.c_str());
+  //std::remove(tsp_file_path.c_str());
 
   cout<<"TSP DONE: "<<paths.size()<<" paths found"<<endl;
   return;

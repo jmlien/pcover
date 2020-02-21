@@ -27,9 +27,12 @@ protected:
         b_charging_station=false;
         t=0;
         time2station=dist2station=0;
+        dist=FLT_MAX;
+        flag=INT_MAX;
       }
 
       int id;
+      int flag; //flags for any special use
       Point2d pos; //location of the node
       //float f, g; //f is the total cost, g is to cost to node
 
@@ -38,13 +41,20 @@ protected:
       list<Point2d> path2station; //path to charging station
 
       float t; //age, in milliseconds
-
-      list< pair<Node *, float> > neighbors;
-      Node * parent;
-      bool visited;
       bool free; //is this node free of obstacles?
       bool b_charging_station;
+
+      list< pair<Node *, float> > neighbors;
+
+      //for shortest path tree
+      Node * parent;
+      list<Node*> children;
+      bool visited;
+      float dist; //distance to root
   };
+
+  static bool compareNode(const Node * n1, const Node * n2)
+  { return n1->dist>n2->dist; }
 
 public:
 
@@ -114,6 +124,7 @@ protected:
   bool schedule_tsp_segments_lp2(int trials);//return false if failed
   void schedule_tsp_segments_greedy(int trials);
   void schedule_shorest_paths_lp(); //
+  void schedule_lollipop_lp();
 
   //return true if m_agent collide with a non-movable object
   //at a given location
@@ -133,6 +144,93 @@ protected:
 
   //nodes visited by the given path
   list<Node *> visitedNodes(const list<Point2d>& path, float arrival_time);
+
+  //build shortest path tree
+  void dijkstra(Node * root);
+
+  struct Lollipop_Node
+  {
+    Lollipop_Node(Node * data=NULL){
+      this->data=data;
+      pre=next=this;
+      pre_cost=next_cost=0;
+      inserted=false;
+    }
+
+    float net_cost() const {
+      if(inserted) {
+        cerr<<"! Error: This node has been inserted. No net cost."<<endl;
+        return FLT_MAX;
+      }
+      return pre_cost+next_cost-pre->next_cost;
+    }
+
+    //insert this node between pre and next
+    void insert_this()
+    {
+        pre->next=this;
+        next->pre=this;
+        pre->next_cost=pre_cost;
+        next->pre_cost=next_cost;
+        inserted=true;
+    }
+
+    bool operator<(const Lollipop_Node & other) const
+    {
+      return this->net_cost()>other.net_cost();
+    }
+
+    bool inserted;     //if this node has been inserted to a linked list
+    Node * data;
+    Lollipop_Node * pre, * next;
+    float pre_cost, next_cost;
+  };
+
+  struct Lollipop
+  {
+    Lollipop(){
+      head=NULL;
+      time_needed=FLT_MAX;
+      count=0;
+    }
+
+    void insert(Lollipop_Node * ln)
+    {
+      count++;
+      if(head==NULL)
+      {
+        head=ln;
+        time_needed=0;
+        return;
+      }
+
+      time_needed=time_needed-ln->pre->next_cost+ln->pre_cost+ln->next_cost;
+      ln->insert_this();
+    }
+
+    void reset()
+    {
+      Lollipop_Node * ptr=head;
+      do{
+        Lollipop_Node * next=ptr->next;
+        delete ptr;
+        ptr=next;
+      }while(ptr!=head);
+      head=NULL;
+      time_needed=0;
+      count=0;
+    }
+
+    Lollipop_Node * head;
+    float time_needed;
+    int count;
+  };
+
+  //build a lollipop tour and return the time needed
+  float buid_lollipop(Node * n, list<Node *>& lollipop);
+  Lollipop init_lollipop(Node * n, float battery, float latency);
+  bool expand_lollipop(Lollipop & lollipop, float battery, float latency);
+  bool reduce_lollipop(Lollipop & lollipop, float battery, float latency);
 
   //check if the schedule time is valid
   //bool isvalid(MySchedule& s, Node * new_n);
@@ -169,7 +267,7 @@ protected:
 
 
   //compute a matrix represention of the graph
-  typedef vector< pair<Node *, float> > TSP;
+  typedef vector< pair<Node *, float> > TSP; //<node, time>
   void tsp(Node * start, vector<TSP>& TSPs, int number); //nodes and weights
   void tsp(const vector<Node *>& subg, Node * start, vector<TSP>& TSPs, int number);
 
@@ -181,6 +279,73 @@ protected:
   (const MyPCoverPlanner::TSP& tour,
    MyPCoverPlanner::TSP::const_iterator start,
    vector<MySchedule>& schedules);
+
+   //some helpers
+   //find a common neighbor of n1 and n2
+   pair<Node *, pair<float, float> >
+   getClosestCommonNeighbor(Node * n1, Node * n2)
+   {
+     int flag=n1->flag;
+     if(flag!=n2->flag)
+     {
+       cerr<<"! Error: getClosestCommonNeighbor: flag error"<<endl;
+       exit(1);
+     }
+
+     float shortest_d=FLT_MAX;
+     pair<Node *, pair<float, float> > best(NULL, make_pair(FLT_MAX,FLT_MAX));
+     for(auto nei1 : n1->neighbors)
+     {
+       for(auto nei2 : n2->neighbors)
+       {
+         if(nei1.first==nei2.first)
+         {
+           Node * nei=nei1.first;
+//         cout<<"nei id="<<nei->id<<" flag="<<nei->flag<<endl;
+           if(nei->flag==flag) continue; //already included
+           //we want the nei to be further away from n1 and n2
+//           cout<<"nei dist="<<nei->dist<<" n1->dist="<<n1->dist<<" n2->dist="<<n2->dist<<endl;
+           if(nei->dist<n1->dist && nei->dist<n2->dist) continue;
+           float d=nei1.second+nei2.second;
+           if(d<shortest_d)
+           {
+             shortest_d=d;
+             best.first=nei;
+             best.second.first =nei1.second;
+             best.second.second=nei2.second;
+           }
+         }
+       }//end for nei2
+     }//end for nei1
+
+     return best;
+   }
+
+   //get Nodes that are connected to n and further away from
+   //the charging station than n
+   list<Node *> getFurtherNodes(Node * n)
+   {
+     list<Node *> ans;
+     for(auto nei : n->neighbors)
+     {
+       if(nei.first->dist>n->dist) ans.push_back(nei.first);
+     }
+     return ans;
+   }
+
+   pair<Node *, float> getClosestFurtherNodes(Node * n)
+   {
+     pair<Node *, float> best(NULL, FLT_MAX);
+     for(auto nei : n->neighbors)
+     {
+       if(nei.first->dist>n->dist && nei.second<best.second)
+       {
+         best=nei;
+       }
+     }
+     return best;
+   }
+  //------------>
 
   std::vector< std::vector<Node> > m_grid; //a grid for motion planning
   //static bool comp(Node * a, Node * b){ return a->f>b->f;}
