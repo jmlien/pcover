@@ -539,7 +539,7 @@ bool MyPCoverPlanner::expand_lollipop
       float increase=n.second.first+n.second.second-ptr->next_cost;
       cout<<"\t add node "<<n.first->id<<" increase="<<increase<<endl;
       if(increase<min_cost_increase ||
-         (min_cost_increase==increase && n.first->dist<min_dist))
+         (min_cost_increase==increase && n.first->dist>min_dist))
       {
         min_cost_increase=increase;
         min_dist=n.first->dist;
