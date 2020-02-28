@@ -134,6 +134,8 @@ protected:
   void schedule_tsp_segments_greedy(int trials);
   void schedule_shorest_paths_lp(); //
   void schedule_lollipop_lp();
+  void schedule_lollipop_lp2();
+  void schedule_dijkstra_lp();
 
   //return true if m_agent collide with a non-movable object
   //at a given location
@@ -156,6 +158,8 @@ protected:
 
   //build shortest path tree
   void dijkstra(Node * root);
+  //get desendents on dijkstra's tree
+  void get_desendents(Node * n, vector<Node*> & decendents);
 
   struct Lollipop_Node
   {
@@ -204,6 +208,59 @@ protected:
       entrance=exit=NULL;
     }
 
+    void destroy(){ reset(); }
+
+    Lollipop clone()
+    {
+      Lollipop other;
+      other.count=count;
+      other.time_needed=time_needed;
+      other.entrance=entrance;
+      other.exit=exit;
+      //
+      other.head=new Lollipop_Node(this->head->data);
+      assert(other.head);
+      other.head->next_cost=head->next_cost;
+      other.head->pre_cost=head->pre_cost;
+      other.head->inserted=true;
+
+      auto ptr=head->next;
+      auto other_pre=other.head;
+      do {
+        auto other_ptr=new Lollipop_Node(ptr->data);
+        assert(other_ptr);
+        other_ptr->next_cost=ptr->next_cost;
+        other_ptr->pre_cost=ptr->pre_cost;
+        other_ptr->pre=other_pre;
+        other_pre->next=other_ptr;
+        other_ptr->inserted=true;
+        ptr=ptr->next;
+        other_pre=other_ptr;
+      }
+      while(ptr!=head);
+      other_pre->next=other.head;
+      other.head->pre=other_pre;
+
+      return other;
+    }
+
+    bool operator<(const Lollipop& other) const
+    {
+        if(count!=other.count) return count<other.count;
+        if(time_needed!=other.time_needed) return time_needed<other.time_needed;
+
+        Lollipop_Node * ptr1=head;
+        Lollipop_Node * ptr2=other.head;
+        do{
+          if(ptr1->data->id!=ptr2->data->id)
+            return ptr1->data->id<ptr2->data->id;
+          ptr1=ptr1->next;
+          ptr2=ptr2->next;
+        }
+        while(ptr1!=head);
+        return false;
+    }
+
     void insert(Lollipop_Node * ln)
     {
       count++;
@@ -244,14 +301,19 @@ protected:
   };
 
   //build a lollipop tour and return the time needed
-  float build_lollipop(Node * n, list<Point2d>& lollipop, float start_time);
+  Lollipop build_lollipop(Node * n, float start_time);
+  vector<Lollipop> build_lollipops(Node * n, float start_time);
   Lollipop init_lollipop(Node * n, float battery, float latency);
   bool expand_lollipop(Lollipop & lollipop, float battery, float latency);
+  bool expand_lollipop(Lollipop & lollipop, set<Lollipop>& expand, float battery, float latency);
   bool optimize_lollipop(Lollipop & lollipop, float battery, float latency);
   bool optimize_lollipop_simple(Lollipop & lollipop, float battery, float latency);
   bool optimize_lollipop_simple2(Lollipop & lollipop, float battery, float latency);
+  MySchedule lollipop2schedule(Lollipop & lollipop);
   //check if the schedule time is valid
   //bool isvalid(MySchedule& s, Node * new_n);
+
+
 
   struct LP_constraints
   {
@@ -286,8 +348,13 @@ protected:
 
   //compute a matrix represention of the graph
   typedef vector< pair<Node *, float> > TSP; //<node, time>
+
   void tsp(Node * start, vector<TSP>& TSPs, int number); //nodes and weights
   void tsp(const vector<Node *>& subg, Node * start, vector<TSP>& TSPs, int number);
+  void tsp_easy( vector<Node *>& subg, Node * start, vector<TSP>& TSPs, int number); //nodes and weights
+
+  //convert tsp to lollipop
+  Lollipop tsp2lollipop(TSP& tsp);
 
   //build a schedule from a tour and its start
   TSP::const_iterator build_valid_schedule_from_tsp
@@ -382,6 +449,12 @@ protected:
   Node * m_charging_station;
   string m_opt_method; //optimization method specified
   vector<MySchedule> m_schedules; //one for each chicken
+
+
+  static int PCOVER_FLAG;
+  int getFlag(){ return PCOVER_FLAG--;}
+//  TSP_FLAG--; //a unique flag for each TSP call
+
 };
 
 }//end namespace GMUCS425

@@ -11,6 +11,8 @@ using namespace mathtool;
 namespace GMUCS425
 {
 
+int MyPCoverPlanner::PCOVER_FLAG=INT_MAX;
+
 int gcd(int a, int b)
 {
     for (;;)
@@ -147,6 +149,10 @@ bool MyPCoverPlanner::schedule( const Point2d& start )
     schedule_shorest_paths_lp();
   else if(m_opt_method=="lollipop_lp")
       schedule_lollipop_lp();
+  else if(m_opt_method=="lollipop_lp2")
+      schedule_lollipop_lp2();
+  else if(m_opt_method=="dijkstra_lp")
+      schedule_dijkstra_lp();
   else{
     cerr<<"! Error: Unknown pcover optimization method: "<<m_opt_method<<endl;
     return false;
@@ -368,6 +374,57 @@ void MyPCoverPlanner::schedule_tsp_segments_greedy(int trials)
 }
 
 //lollipop tours
+void MyPCoverPlanner::schedule_dijkstra_lp()
+{
+  //for each node, create a lollipop
+  vector<MySchedule> schedules;
+  cout<<"root id="<<m_charging_station->id<<endl;
+  for(int i=0;i<m_height;i++)
+  {
+    for(int j=0;j<m_width;j++)
+    {
+      Node & n=m_grid[i][j];
+      if(!n.free) continue; //this node is in collision, no neighbors
+
+      //
+      //if(&n!=this->m_charging_station) continue;
+      //if(n.id!=24) continue;
+      //
+
+      cout<<"processing id="<<n.id<<endl;
+      vector<Node*> desendents;
+      vector<MyPCoverPlanner::TSP> TSPs;
+      get_desendents(&n,desendents);
+      desendents.push_back(&n);
+
+      if(desendents.size()<4) continue;
+
+      tsp_easy(desendents,&n,TSPs,1);
+
+      Lollipop lollipop=tsp2lollipop(TSPs.front());
+      if(lollipop.time_needed>m_battery) continue;
+
+      float battery=this->m_battery-n.time2station*2;
+      float latency=this->m_latency-n.time2station;
+      if(battery<=0 || latency<=0) continue;//no time/power left
+
+      //optimize_lollipop_simple2(lollipop,battery,latency);
+      MySchedule schedule=lollipop2schedule(lollipop);
+      lollipop.destroy();
+      //if(schedule.duration>m_battery) continue;
+      schedules.push_back(schedule);
+    }
+  }
+
+//  m_schedules=schedules;
+//  return;
+
+  //find optimal subset
+  int total_chickens_needed=SolveLP(schedules, m_schedules);
+  cout<<"- Best schedule needs "<<total_chickens_needed<<" chickens and "<<m_schedules.size()<<" tours"<<endl;
+}
+
+//lollipop tours
 void MyPCoverPlanner::schedule_lollipop_lp()
 {
   //for each node, create a lollipop
@@ -384,65 +441,11 @@ void MyPCoverPlanner::schedule_lollipop_lp()
       //if(&n!=this->m_charging_station) continue;
       //if(n.id!=87) continue;
       //
-
-      MySchedule schedule;
-
-      cout<<"processing id="<<n.id<<endl;
-      // cout<<"time2station="<<n.time2station<<endl;
-      // cout<<"dist="<<n.dist<<endl;
-
-      //path to node n
-      /*
-      float time_needed=0;
-      // if(n.dist<n.time2station)
-      // {
-      //   time_needed=traceback(&n,schedule.nodes);
-      //   for(Node * n : schedule.nodes) schedule.push_back(n->pos);
-      // }
-      // else
-      // {
-        time_needed=n.time2station;
-        schedule.insert(schedule.end(), n.path2station.begin(), n.path2station.end() );
-        schedule.nodes=visitedNodes(schedule,0);
-      //}
-
-      //mark the visited nodes
-      for(Node * m : schedule.nodes) m->flag=n.id;
-
-      //the loop
-      list<Node*> lollipop;
-      time_needed+=build_lollipop(&n,lollipop, time_needed);
-      //cout<<"build_lollipop time_need="<<time_needed<<endl;
-
-      for(Node * n : lollipop)
-      {
-        schedule.push_back(n->pos);
-        schedule.nodes.push_back(n);
-      }
-
-      //return trip
-      auto path=n.path2station;
-      schedule.insert(schedule.end(), path.rbegin(), path.rend() );
-      path.reverse();
-      auto return_nodes=visitedNodes(path,time_needed);
-      schedule.nodes.insert(schedule.nodes.end(),return_nodes.begin(),return_nodes.end());
-
-      // cout<<"nodes:";
-      // for(auto n : schedule.nodes) cout<<n->id<<",";
-      // cout<<endl;
-
-      //schedule.nodes.push_back(&n);
-      schedule.duration=n.time2station+time_needed;
-      schedule.chicken_needed=(int)ceil((schedule.duration+m_charging)*1.0f/m_latency);
-
-      // cout<<"schedule.chicken_needed="<<schedule.chicken_needed<<endl;
-      // cout<<"schedule size="<<schedule.nodes.size()<<endl;
-      */
-
-      schedule.duration=build_lollipop(&n,schedule,0);
-      schedule.nodes=visitedNodes(schedule,0);
-      schedule.chicken_needed=(int)ceil((schedule.duration+m_charging)*1.0f/m_latency);
+      Lollipop lollipop=build_lollipop(&n,0);
+      if(lollipop.head==NULL) continue; //invalid lollipop
+      MySchedule schedule=lollipop2schedule(lollipop);
       schedules.push_back(schedule);
+      lollipop.destroy();
     }
   }
 
@@ -454,13 +457,51 @@ void MyPCoverPlanner::schedule_lollipop_lp()
   cout<<"- Best schedule needs "<<total_chickens_needed<<" chickens and "<<m_schedules.size()<<" tours"<<endl;
 }
 
-//build a lollipop tour and return the time needed
-float MyPCoverPlanner::build_lollipop
-(MyPCoverPlanner::Node * n, list<Point2d>& lollipop_pos, float start_time)
+//lollipop tours
+void MyPCoverPlanner::schedule_lollipop_lp2()
 {
+  //for each node, create a lollipop
+  vector<MySchedule> schedules;
+  cout<<"root id="<<m_charging_station->id<<endl;
+  for(int i=0;i<m_height;i++)
+  {
+    for(int j=0;j<m_width;j++)
+    {
+      Node & n=m_grid[i][j];
+      if(!n.free) continue; //this node is in collision, no neighbors
+
+      //
+      //if(&n!=this->m_charging_station) continue;
+      //if(n.id!=87) continue;
+      //
+      vector<Lollipop> lollipops=build_lollipops(&n,0);
+      for(Lollipop & lollipop : lollipops)
+      {
+        MySchedule schedule=lollipop2schedule(lollipop);
+        schedules.push_back(schedule);
+        lollipop.destroy();
+      }//for each lollipop
+    }//for j
+  }//for i
+
+  //m_schedules=schedules;
+  //return;
+
+  //find optimal subset
+  int total_chickens_needed=SolveLP(schedules, m_schedules);
+  cout<<"- Best schedule needs "<<total_chickens_needed<<" chickens and "<<m_schedules.size()<<" tours"<<endl;
+}
+
+
+//build many lollipop tours
+vector<MyPCoverPlanner::Lollipop>
+MyPCoverPlanner::build_lollipops
+(MyPCoverPlanner::Node * n, float start_time)
+{
+  vector<Lollipop> lollipops;
   float battery=this->m_battery-n->time2station*2;
   float latency=this->m_latency-n->time2station;
-  if(battery<=0 || latency<=0) return 0;//no time/power left
+  if(battery<=0 || latency<=0) return lollipops;//no time/power left
 
   //mark the visited nodes
   auto visited_nodes=visitedNodes(n->path2station,0);
@@ -468,13 +509,64 @@ float MyPCoverPlanner::build_lollipop
 
   //init the process with a simple loop
   Lollipop lollipop=init_lollipop(n,battery,latency);
-  if(lollipop.head==NULL) return 0;
+  if(lollipop.head==NULL) return lollipops;
+  //optimize_lollipop(lollipop,battery,latency);
+  //optimize_lollipop_simple(lollipop,battery,latency);
+  //optimize_lollipop_simple2(lollipop,battery,latency);
+
+cout<<"A"<<endl;
+
+  //now expand the loop
+  //int count=0;
+  set<MyPCoverPlanner::Lollipop> open;
+  set<MyPCoverPlanner::Lollipop> closed;
+  open.insert(lollipop);
+  while(open.empty()==false)
+  {
+    Lollipop lollipop=*open.begin();
+    open.erase(open.begin());
+
+cout<<"open size="<<open.size()<<endl;
+cout<<"closed size="<<closed.size()<<endl;
+
+    float battery=this->m_battery-lollipop.entrance->time2station-lollipop.exit->time2station;
+    float latency=this->m_latency-lollipop.entrance->time2station;
+
+    //cout<<"battery="<<battery<<endl;
+    //cout<<"latency="<<latency<<endl;
+
+    //expand this lollipop, if failed, then close it
+    if( !expand_lollipop(lollipop, open, battery,latency) )
+    {
+      closed.insert(lollipop);
+    }
+  }
+
+  lollipops=vector<Lollipop>(closed.begin(), closed.end());
+  return lollipops;
+}
+
+
+//build a lollipop tour
+MyPCoverPlanner::Lollipop
+MyPCoverPlanner::build_lollipop
+(MyPCoverPlanner::Node * n, float start_time)
+{
+  Lollipop lollipop;
+  float battery=this->m_battery-n->time2station*2;
+  float latency=this->m_latency-n->time2station;
+  if(battery<=0 || latency<=0) return lollipop;//no time/power left
+
+  //mark the visited nodes
+  auto visited_nodes=visitedNodes(n->path2station,0);
+  for(Node * m : visited_nodes) m->flag=n->id;
+
+  //init the process with a simple loop
+  lollipop=init_lollipop(n,battery,latency);
+  if(lollipop.head==NULL) return lollipop;
   //optimize_lollipop(lollipop,battery,latency);
   //optimize_lollipop_simple(lollipop,battery,latency);
   optimize_lollipop_simple2(lollipop,battery,latency);
-
-cout<<"lollipop size="<<lollipop.count<<endl;
-//cout<<"lollipop time="<<lollipop.time_needed+start_time-n->time2station*2<<endl;
 
   //now expand the loop
   //int count=0;
@@ -491,43 +583,47 @@ cout<<"lollipop size="<<lollipop.count<<endl;
       //if(!optimize_lollipop(lollipop,battery,latency)) break;
       //if(!optimize_lollipop_simple(lollipop,battery,latency)) break;
       if(!optimize_lollipop_simple2(lollipop,battery,latency)) break;
-
-      //if(optimize_lollipop(lollipop,battery,latency)==false)
-      //  break;
     }
   }
-  // {
-  //   if(count++==2) break;
-  // }
 
-  cout<<"--------"<<endl;
+  return lollipop;
+}
 
-  //collect nodes
-  lollipop_pos=lollipop.entrance->path2station;
-  if(lollipop.best_tsp.empty())
-  {
-    auto ptr=lollipop.head;
-    while(ptr->data!=lollipop.entrance) ptr=ptr->next;
-    do
+MyPCoverPlanner::MySchedule
+MyPCoverPlanner::lollipop2schedule(MyPCoverPlanner::Lollipop & lollipop)
+{
+    MyPCoverPlanner::MySchedule schedule;
+    auto & path=lollipop.entrance->path2station;
+    schedule.insert(schedule.end(),path.begin(),path.end());
+
+    if(lollipop.best_tsp.empty())
     {
-      lollipop_pos.push_back(ptr->data->pos);
-      ptr=ptr->next;
+      auto ptr=lollipop.head;
+      while(ptr->data!=lollipop.entrance) ptr=ptr->next;
+      do
+      {
+        schedule.push_back(ptr->data->pos);
+        ptr=ptr->next;
+      }
+      while(ptr->data!=lollipop.entrance);
     }
-    while(ptr->data!=lollipop.entrance);
-  }
-  else
-  {
-    //cout<<"AAAAAAAAAh"<<endl;
-    for(Node * node : lollipop.best_tsp)
-      lollipop_pos.push_back(node->pos);
-  }
+    else
+    {
+      //cout<<"AAAAAAAAAh"<<endl;
+      for(Node * node : lollipop.best_tsp)
+        schedule.push_back(node->pos);
+    }
 
-  auto& returnpath=lollipop.exit->path2station;
-  lollipop_pos.insert(lollipop_pos.end(),returnpath.rbegin(),returnpath.rend());
+    auto& returnpath=lollipop.exit->path2station;
+    schedule.insert(schedule.end(),returnpath.rbegin(),returnpath.rend());
 
-  cout<<"lollipop count="<<lollipop.count<<endl;
-  //cout<<"lollipop_nodes size="<<lollipop_nodes.size()<<endl;
-  return lollipop.time_needed+lollipop.entrance->time2station+lollipop.exit->time2station;
+    cout<<"lollipop count="<<lollipop.count<<endl;
+    //cout<<"lollipop_nodes size="<<lollipop_nodes.size()<<endl;
+    schedule.duration=lollipop.time_needed+lollipop.entrance->time2station+lollipop.exit->time2station;
+    schedule.nodes=visitedNodes(schedule,0);
+    schedule.chicken_needed=(int)ceil((schedule.duration+m_charging)*1.0f/m_latency);
+
+    return schedule;
 }
 
 MyPCoverPlanner::Lollipop MyPCoverPlanner::init_lollipop
@@ -618,7 +714,7 @@ bool MyPCoverPlanner::expand_lollipop
   float new_cost=lollipop.time_needed + min_cost_increase;
   //cout<<"new_cost="<<new_cost<<" min_cost_increase="<<min_cost_increase<<endl;
   if(new_cost> battery) return false; //exceeded needed power
-  if(new_cost > latency) return false; //exceeded time
+  if(new_cost> latency) return false; //exceeded time
 
   best->data->flag=lollipop.head->data->id;
   lollipop.insert(best);
@@ -626,6 +722,67 @@ bool MyPCoverPlanner::expand_lollipop
   //cout<<"expand ->"<<best->data->id<<" time need="<<lollipop.time_needed<<endl;
   return true;
 }
+
+
+
+bool MyPCoverPlanner::expand_lollipop
+(MyPCoverPlanner::Lollipop & lollipop, set<MyPCoverPlanner::Lollipop>& expand,
+ float battery, float latency)
+{
+cout<<"X"<<endl;
+  int expand_count=0;
+  auto * ptr=lollipop.head;
+  auto * next=ptr->next;
+
+cout<<"A"<<endl;
+
+  //mark all nodes in the lollipop
+  auto flag=getFlag();
+  do{ ptr->data->flag=flag; ptr=ptr->next; }while(ptr!=lollipop.head);
+
+cout<<"B"<<endl;
+
+  //expand
+  ptr=lollipop.head;
+  do{
+    while(true)
+    {
+      auto n=getClosestCommonNeighbor(ptr->data,next->data);
+      Node * node = n.first;
+      if(node==NULL) break;
+      Lollipop_Node * ln=new Lollipop_Node(node);
+      assert(ln);
+      node->flag=flag; //important, so we don't get this node again
+      ln->data=node;
+      ln->pre=ptr;
+      ln->next=next;
+      ln->pre_cost=n.second.first;
+      ln->next_cost=n.second.second;
+
+      float increase=n.second.first+n.second.second-ptr->next_cost;
+      float new_cost=lollipop.time_needed + increase;
+      if(new_cost> battery) return false; //exceeded needed power
+      if(new_cost> latency) return false; //exceeded time
+
+      auto lollipop2=lollipop.clone();
+      lollipop2.insert(ln);
+      expand.insert(lollipop2);
+      expand_count++;
+    }
+
+    ptr=next;
+    next=ptr->next;
+  }
+  while(ptr!=lollipop.head);
+
+cout<<"C"<<endl;
+
+  //cout<<"expand ->"<<best->data->id<<" time need="<<lollipop.time_needed<<endl;
+  cout<<"expand_count="<<expand_count<<endl;
+  cout<<"expand size="<<expand.size()<<endl;
+  return expand_count>0;
+}
+
 
 //convert the lollipop to a graph and find TSP
 bool MyPCoverPlanner::optimize_lollipop
@@ -731,52 +888,6 @@ bool MyPCoverPlanner::optimize_lollipop
 
   delete dummy;
   return orig_time_needed>min_time_needed;
-
-  //cout<<"TSPs size="<<TSPs.size()<<endl;
-
-  //compute cost
-  // cout<<"get tsp cost"<<endl;
-  // MyPCoverPlanner::TSP & TSP=TSPs.front();
-  // //cout<<"TSP size="<<TSP.size()<<endl;
-  // float time_needed=0;
-  // for(auto & node : TSP)
-  // {
-  //   node.first->id=id2id[node.first->id]; //put the old id back
-  //   time_needed+=node.second;
-  // }
-  // cout<<"tsp time_needed="<<time_needed<<" old time="<<lollipop.time_needed<<endl;
-  // //if(time_needed>=lollipop.time_needed) //not faster...
-  // //  return false;
-
-  //convert tsp to lollipop
-  /*
-  cout<<"convert tsp to lollipop"<<endl;
-  lollipop.reset();
-  Lollipop_Node * n0=new Lollipop_Node(TSP.front().first);
-  assert(n0);
-  lollipop.insert(n0);
-  Lollipop_Node * pre=n0;
-  auto pre_it=TSP.begin();
-
-  lollipop.count=TSP.size();
-  lollipop.time_needed=time_needed;
-  for( auto it=++TSP.begin(); it!=TSP.end(); it++)
-  {
-    Lollipop_Node * n=new Lollipop_Node(it->first);
-    assert(n);
-    pre->next=n; n->pre=pre;
-    pre->next_cost=n->pre_cost=pre_it->second;
-    pre=n;
-    pre_it=it;
-  }//end for node
-  //now, pre, is the last node
-  pre->next=n0; n0->pre=pre;
-  pre->next_cost=n0->pre_cost=TSP.back().second;
-
-  return expand_lollipop(lollipop,battery,latency);
-  */
-
-  return true;
 }
 
 
@@ -811,6 +922,36 @@ bool MyPCoverPlanner::optimize_lollipop_simple
 }
 
 
+//convert tsp to lollipop
+MyPCoverPlanner::Lollipop MyPCoverPlanner::tsp2lollipop
+(MyPCoverPlanner::TSP& tsp)
+{
+   cout<<"convert tsp to lollipop"<<endl;
+   Lollipop lollipop;
+   Lollipop_Node * n0=new Lollipop_Node(tsp.front().first);
+   assert(n0);
+   lollipop.insert(n0);
+   Lollipop_Node * pre=n0;
+   auto pre_it=tsp.begin();
+   lollipop.count=tsp.size();
+   lollipop.time_needed=0;
+   for( auto it=++tsp.begin(); it!=tsp.end(); it++)
+   {
+     Lollipop_Node * n=new Lollipop_Node(it->first);
+     assert(n);
+     pre->next=n; n->pre=pre;
+     pre->next_cost=n->pre_cost=pre_it->second;
+     pre=n;
+     pre_it=it;
+     lollipop.time_needed+=pre_it->second;
+   }//end for node
+   //now, pre, is the last node
+   pre->next=n0; n0->pre=pre;
+   pre->next_cost=n0->pre_cost=tsp.back().second;
+   lollipop.time_needed+=tsp.back().second;
+
+   return lollipop;
+}
 
 //convert the lollipop to a graph and find TSP
 bool MyPCoverPlanner::optimize_lollipop_simple2
@@ -1125,14 +1266,37 @@ void MyPCoverPlanner::update() //update the timmer of the grid
   }//end obst
 }
 
+void MyPCoverPlanner::
+tsp_easy(vector<Node *>& subg, Node * start,
+         vector<MyPCoverPlanner::TSP>& TSPs, int number)
+{
+  //build subset
+  unordered_map<int, int> id2id;
+  int vid=0;
+  for(Node * node: subg)
+  {
+    int oldid=node->id;
+    node->id=vid++;
+    id2id[node->id]=oldid;
+  }
+
+  //now run tsp
+  tsp(subg,start,TSPs, number);
+
+  //restore the ids
+  for(Node * node : subg)
+  {
+    node->id=id2id[node->id]; //put the old id back
+  }
+}
+
 //note start must be in subg
 void MyPCoverPlanner::
 tsp(const vector<Node *>& subg, Node * start,
     vector<MyPCoverPlanner::TSP>& TSPs, int number)
 {
   assert(find(subg.begin(),subg.end(),start)!=subg.end());
-  static int TSP_FLAG=INT_MAX;
-  TSP_FLAG--; //a unique flag for each TSP call
+  auto TSP_FLAG=getFlag();
 
   //prepare the matrix
   int size=subg.size();
@@ -1445,24 +1609,19 @@ void MyPCoverPlanner::dijkstra(Node * root)
     }//end nei
   }//end while
 
-  //exit(0);
+}
 
-  //
-  // //now collect childrens
-  // for(int i=0;i<m_height;i++)
-  // {
-  //   for(int j=0;j<m_width;j++)
-  //   {
-  //     Node & n=m_grid[i][j];
-  //     if(!n.free) continue;
-  //     for(auto& nei : n.neighbors)
-  //     {
-  //       Node * nn=nei.first;
-  //       if(nn->parent==&n) n.children.push_back(nn);
-  //     }
-  //   }//end j
-  // }//end i
-
+void MyPCoverPlanner::get_desendents(Node * n, vector<Node*> & decendents)
+{
+  for(auto& nei : n->neighbors)
+  {
+    Node * nn=nei.first;
+    if(nn->parent == n)
+    {
+      decendents.push_back(nn);
+      get_desendents(nn,decendents);
+    }
+  }
 }
 
 //compute path from each node to the charging station
