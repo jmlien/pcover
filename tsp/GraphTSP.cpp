@@ -53,12 +53,13 @@ void GraphTSP::FindTSPConcorde(vector< vector< int >  > & matrix, //the graph
 
     const string clock_str = std::to_string(std::rand()); //clock());
     const string solution_path = "tsp_solution_" + clock_str + ".txt";
+    const string cmd_output = "tsp_solution_" + clock_str + "_dump.txt";
     const string init_upper_bound = std::to_string(matrix.size());
 
     const map<string, string> args = { /***** {Key, Value} ******/
-    { "-q", "" }, /* do not cut the root lp */
+    //{ "-q", "" }, /* do not cut the root lp */
     { "-x", "" }, /* delete files on completion (sav pul mas) */
-//    { "-V", "" }, /* just run fast cuts */
+    { "-V", "" }, /* just run fast cuts */
         { "-u", init_upper_bound }, /* init upperbound */
         { "-s", clock_str }, /* random seed */
         { "-o", solution_path } /* solution pah */
@@ -72,12 +73,14 @@ void GraphTSP::FindTSPConcorde(vector< vector< int >  > & matrix, //the graph
 
     paramters += tsp_file_path;
 
-    const string command = path_to_solver + " " + paramters;
+    string command = path_to_solver + " " + paramters;
 
-    cerr << "[concorde] Running command: " << command << endl;
+    //cerr << "[concorde] Running command: " << command << endl;
 
     // Run external solver
+    command=command+" &> "+cmd_output;
     int rtn = system(command.c_str());
+    std::remove(cmd_output.c_str());
 
     ifstream in(solution_path);
 
@@ -133,7 +136,7 @@ void GraphTSP::FindTSPConcorde(vector< vector< int >  > & matrix, //the graph
 
   //std::remove(tsp_file_path.c_str());
 
-  cout<<"TSP DONE: "<<paths.size()<<" paths found"<<endl;
+  //cout<<"TSP DONE: "<<paths.size()<<" paths found"<<endl;
   return;
 }
 

@@ -56,6 +56,15 @@ protected:
   static bool compareNode(const Node * n1, const Node * n2)
   { return n1->dist>n2->dist; }
 
+  float getWeight(Node * n1, Node * n2)
+  {
+    for(auto nei : n1->neighbors){
+      if(nei.first==n2) return nei.second;
+    }
+    cerr<<"! Error: getWeight: node "<<n1->id<<" and node "<<n2->id<<" are not connected"<<endl;
+    exit(1);
+  }
+
 public:
 
   struct MySchedule : public list<Point2d>
@@ -192,6 +201,7 @@ protected:
       head=NULL;
       time_needed=FLT_MAX;
       count=0;
+      entrance=exit=NULL;
     }
 
     void insert(Lollipop_Node * ln)
@@ -200,6 +210,7 @@ protected:
       if(head==NULL)
       {
         head=ln;
+        entrance=exit=ln->data;
         time_needed=0;
         return;
       }
@@ -210,6 +221,8 @@ protected:
 
     void reset()
     {
+      if(head==NULL) return; //nothing here
+
       Lollipop_Node * ptr=head;
       do{
         Lollipop_Node * next=ptr->next;
@@ -217,6 +230,7 @@ protected:
         ptr=next;
       }while(ptr!=head);
       head=NULL;
+      entrance=exit=NULL;
       time_needed=0;
       count=0;
     }
@@ -224,14 +238,18 @@ protected:
     Lollipop_Node * head;
     float time_needed;
     int count;
+
+    list<Node *> best_tsp; //tsp from entrance to exit, if entrance!=head
+    Node * entrance, * exit;
   };
 
   //build a lollipop tour and return the time needed
-  float buid_lollipop(Node * n, list<Node *>& lollipop);
+  float build_lollipop(Node * n, list<Point2d>& lollipop, float start_time);
   Lollipop init_lollipop(Node * n, float battery, float latency);
   bool expand_lollipop(Lollipop & lollipop, float battery, float latency);
-  bool reduce_lollipop(Lollipop & lollipop, float battery, float latency);
-
+  bool optimize_lollipop(Lollipop & lollipop, float battery, float latency);
+  bool optimize_lollipop_simple(Lollipop & lollipop, float battery, float latency);
+  bool optimize_lollipop_simple2(Lollipop & lollipop, float battery, float latency);
   //check if the schedule time is valid
   //bool isvalid(MySchedule& s, Node * new_n);
 
@@ -283,7 +301,7 @@ protected:
    //some helpers
    //find a common neighbor of n1 and n2
    pair<Node *, pair<float, float> >
-   getClosestCommonNeighbor(Node * n1, Node * n2)
+   getClosestCommonNeighbor(Node * n1, Node * n2, int strict_level=1)
    {
      int flag=n1->flag;
      if(flag!=n2->flag)
@@ -305,7 +323,8 @@ protected:
            if(nei->flag==flag) continue; //already included
            //we want the nei to be further away from n1 and n2
 //           cout<<"nei dist="<<nei->dist<<" n1->dist="<<n1->dist<<" n2->dist="<<n2->dist<<endl;
-           if(nei->dist<n1->dist && nei->dist<n2->dist) continue;
+           if( (strict_level==1) && (nei->time2station<n1->time2station || nei->time2station<n2->time2station) ) continue;
+           if( (strict_level==2) && (nei->time2station<n1->time2station && nei->time2station<n2->time2station) ) continue;
            float d=nei1.second+nei2.second;
            if(d<shortest_d)
            {
@@ -318,6 +337,8 @@ protected:
        }//end for nei2
      }//end for nei1
 
+     if(shortest_d==FLT_MAX && strict_level!=3)
+      return getClosestCommonNeighbor(n1,n2,strict_level+1);
      return best;
    }
 
@@ -328,7 +349,7 @@ protected:
      list<Node *> ans;
      for(auto nei : n->neighbors)
      {
-       if(nei.first->dist>n->dist) ans.push_back(nei.first);
+       if(nei.first->time2station>n->time2station) ans.push_back(nei.first);
      }
      return ans;
    }
@@ -346,6 +367,7 @@ protected:
      return best;
    }
   //------------>
+  float traceback(Node * n, list<Node *>& path);
 
   std::vector< std::vector<Node> > m_grid; //a grid for motion planning
   //static bool comp(Node * a, Node * b){ return a->f>b->f;}

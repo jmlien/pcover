@@ -14,7 +14,7 @@ using namespace std;
 bool TSPWriter::WriteTSP(const std::string& path, vector< vector< int >  > & matrix)
 {
 
-  cerr << "- Output to " << path << endl;
+  //cerr << "- Output to " << path << endl;
 
   ofstream out(path);
 
