@@ -136,6 +136,7 @@ protected:
   void schedule_lollipop_lp();
   void schedule_lollipop_lp2();
   void schedule_dijkstra_lp();
+  bool schedule_hybrid(int trials);
 
   //return true if m_agent collide with a non-movable object
   //at a given location
@@ -209,6 +210,17 @@ protected:
     }
 
     void destroy(){ reset(); }
+
+    Lollipop_Node * find(Node * n)
+    {
+      Lollipop_Node * ptr=head;
+      do{
+        if(ptr->data==n) return ptr;
+        ptr=ptr->next;
+      }
+      while(ptr!=head);
+      return NULL;
+    }
 
     Lollipop clone()
     {
@@ -304,8 +316,11 @@ protected:
   Lollipop build_lollipop(Node * n, float start_time);
   vector<Lollipop> build_lollipops(Node * n, float start_time);
   Lollipop init_lollipop(Node * n, float battery, float latency);
+
   bool expand_lollipop(Lollipop & lollipop, float battery, float latency);
   bool expand_lollipop(Lollipop & lollipop, set<Lollipop>& expand, float battery, float latency);
+  Lollipop_Node * find_next_expansion(Lollipop & lollipop, float battery, float latency);
+
   bool optimize_lollipop(Lollipop & lollipop, float battery, float latency);
   bool optimize_lollipop_simple(Lollipop & lollipop, float battery, float latency);
   bool optimize_lollipop_simple2(Lollipop & lollipop, float battery, float latency);
@@ -386,10 +401,12 @@ protected:
          if(nei1.first==nei2.first)
          {
            Node * nei=nei1.first;
-//         cout<<"nei id="<<nei->id<<" flag="<<nei->flag<<endl;
+         //cout<<"nei id="<<nei->id<<" flag="<<nei->flag<<endl;
            if(nei->flag==flag) continue; //already included
            //we want the nei to be further away from n1 and n2
-//           cout<<"nei dist="<<nei->dist<<" n1->dist="<<n1->dist<<" n2->dist="<<n2->dist<<endl;
+         //cout<<"nei dist="<<nei->dist<<" n1->dist="<<n1->dist<<" n2->dist="<<n2->dist<<endl;
+           //if( (strict_level==1) && (nei->dist<=n1->dist || nei->dist<=n2->dist) ) continue;
+           //if( (strict_level==2) && (nei->dist<=n1->dist && nei->dist<=n2->dist) ) continue;
            if( (strict_level==1) && (nei->time2station<n1->time2station || nei->time2station<n2->time2station) ) continue;
            if( (strict_level==2) && (nei->time2station<n1->time2station && nei->time2station<n2->time2station) ) continue;
            float d=nei1.second+nei2.second;
@@ -404,7 +421,7 @@ protected:
        }//end for nei2
      }//end for nei1
 
-     if(shortest_d==FLT_MAX && strict_level!=3)
+     if(shortest_d==FLT_MAX && strict_level!=2)
       return getClosestCommonNeighbor(n1,n2,strict_level+1);
      return best;
    }

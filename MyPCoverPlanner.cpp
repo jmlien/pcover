@@ -11,7 +11,7 @@ using namespace mathtool;
 namespace GMUCS425
 {
 
-int MyPCoverPlanner::PCOVER_FLAG=INT_MAX;
+int MyPCoverPlanner::PCOVER_FLAG=INT_MAX-1;
 
 int gcd(int a, int b)
 {
@@ -139,12 +139,13 @@ bool MyPCoverPlanner::schedule( const Point2d& start )
 
   cout<<"m_opt_method="<<m_opt_method<<endl;
   //schedule!
+  int trial=20;
   if(m_opt_method=="tsp_greedy")
-    schedule_tsp_segments_greedy(20);
+    schedule_tsp_segments_greedy(trial);
   else if(m_opt_method=="tsp_lp")
-    schedule_tsp_segments_lp(20);
+    schedule_tsp_segments_lp(trial);
   else if(m_opt_method=="tsp_lp2")
-    schedule_tsp_segments_lp2(20);
+    schedule_tsp_segments_lp2(trial);
   else if(m_opt_method=="shortest_lp")
     schedule_shorest_paths_lp();
   else if(m_opt_method=="lollipop_lp")
@@ -153,6 +154,8 @@ bool MyPCoverPlanner::schedule( const Point2d& start )
       schedule_lollipop_lp2();
   else if(m_opt_method=="dijkstra_lp")
       schedule_dijkstra_lp();
+  else if(m_opt_method=="hybrid")
+      schedule_hybrid(5);
   else{
     cerr<<"! Error: Unknown pcover optimization method: "<<m_opt_method<<endl;
     return false;
@@ -257,7 +260,8 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp(int trials)
     */
     int total_chickens_needed=SolveLP(schedules,m_schedules);
     //check if this schedule is better
-    cout<<"trial #"<<i<<" needs "<<total_chickens_needed<<" chickens"<<endl;
+    //cout<<"trial #"<<i<<" needs "<<total_chickens_needed<<" chickens"<<endl;
+    cout<<total_chickens_needed<<endl;
     if(total_chickens_needed<min_chickens_needed)
     {
       min_chickens_needed=total_chickens_needed;
@@ -361,7 +365,8 @@ void MyPCoverPlanner::schedule_tsp_segments_greedy(int trials)
       // cout<<" cost="<<schedule.chicken_needed<<endl;
     }//end for tour
 
-    cout<<"trial #"<<i<<" needs "<<total_chickens_needed<<" chickens"<<endl;
+    //cout<<"trial #"<<i<<" needs "<<total_chickens_needed<<" chickens"<<endl;
+    cout<<total_chickens_needed<<endl;
     if(total_chickens_needed<min_chickens_needed)
     {
       min_chickens_needed=total_chickens_needed;
@@ -457,39 +462,141 @@ void MyPCoverPlanner::schedule_lollipop_lp()
   cout<<"- Best schedule needs "<<total_chickens_needed<<" chickens and "<<m_schedules.size()<<" tours"<<endl;
 }
 
-//lollipop tours
-void MyPCoverPlanner::schedule_lollipop_lp2()
+
+
+bool MyPCoverPlanner::schedule_hybrid(int trials)
 {
-  //for each node, create a lollipop
+  //
+  vector<TSP> tours;
+  tsp(m_charging_station,tours,trials);
   vector<MySchedule> schedules;
-  cout<<"root id="<<m_charging_station->id<<endl;
+
+  for(int i=0;i<tours.size();i++)
+  {
+    TSP& tour=tours[i];
+    //break TSP into segments
+    for(auto it=tour.begin(); it!=tour.end(); it++)
+    {
+        build_valid_schedule_from_tsp(tour, it, schedules);
+    }//end for tour
+  }
+
+  //now add tour from lollipop
+  vector< pair<float, Node*> > sorted_nodes;
   for(int i=0;i<m_height;i++)
   {
     for(int j=0;j<m_width;j++)
     {
       Node & n=m_grid[i][j];
       if(!n.free) continue; //this node is in collision, no neighbors
+      //if(&n==this->m_charging_station) continue;
+      sorted_nodes.push_back(make_pair(-n.dist2station, &n));
+    }//end j
+  }//end i
 
-      //
-      //if(&n!=this->m_charging_station) continue;
-      //if(n.id!=87) continue;
-      //
-      vector<Lollipop> lollipops=build_lollipops(&n,0);
-      for(Lollipop & lollipop : lollipops)
-      {
-        MySchedule schedule=lollipop2schedule(lollipop);
-        schedules.push_back(schedule);
-        lollipop.destroy();
-      }//for each lollipop
-    }//for j
-  }//for i
+  sort(sorted_nodes.begin(),sorted_nodes.end());
+  set<Node *> nodes_covered;
 
+  for(auto& data : sorted_nodes)
+  {
+    Node & n=*(data.second);
+    cout<<"working on node "<<n.id<<" distance="<<n.dist2station<<endl;
+    vector<Lollipop> lollipops=build_lollipops(&n,0);
+    for(Lollipop & lollipop : lollipops)
+    {
+      MySchedule schedule=lollipop2schedule(lollipop);
+      //if( m_battery-schedule.duration>750 ) continue;
+      schedules.push_back(schedule);
+      lollipop.destroy();
+      nodes_covered.insert(schedule.nodes.begin(),schedule.nodes.end());
+    }//for each lollipop
+
+    cout<<"- covered "<<nodes_covered.size()<<"/"<<m_num_valid_cells<<" cells,"
+        <<" schedule size="<<schedules.size()<<endl;
+
+    if(m_num_valid_cells==nodes_covered.size())
+      break; //done
+  }//for data
+
+  int total_chickens_needed=SolveLP(schedules,m_schedules);
+
+  cout<<"- Best schedule needs "<<total_chickens_needed
+      <<" chickens and "<<m_schedules.size()<<" tours"<<endl;
+
+  return true;
+}//end MyPCoverPlanner
+
+
+
+//lollipop tours
+void MyPCoverPlanner::schedule_lollipop_lp2()
+{
+  //for each node, create a lollipop
+  vector<MySchedule> schedules;
+  cout<<"root id="<<m_charging_station->id<<endl;
+
+  vector< pair<float, Node*> > sorted_nodes;
+  for(int i=0;i<m_height;i++)
+  {
+    for(int j=0;j<m_width;j++)
+    {
+      Node & n=m_grid[i][j];
+      if(!n.free) continue; //this node is in collision, no neighbors
+      //if(&n==this->m_charging_station) continue;
+      sorted_nodes.push_back(make_pair(-n.dist2station, &n));
+    }//end j
+  }//end i
+
+  sort(sorted_nodes.begin(),sorted_nodes.end());
+  set<Node *> nodes_covered;
+
+  for(auto& data : sorted_nodes)
+  {
+    Node & n=*(data.second);
+    cout<<"working on node "<<n.id<<" distance="<<n.dist2station<<endl;
+    //
+    //if(&n!=this->m_charging_station) continue;
+    //if(n.id!=9) continue;
+    //
+    vector<Lollipop> lollipops=build_lollipops(&n,0);
+    //cout<<"!!!!!!!"<<endl;
+    int count=0;
+    map<int,int> states;
+    for(Lollipop & lollipop : lollipops)
+    {
+      //if(count++!=6) continue;
+      //cout<<"?? lollipop.count="<<lollipop.count<<endl;
+
+      MySchedule schedule=lollipop2schedule(lollipop);
+      if( m_battery-schedule.duration>750 ) continue;
+      states[lollipop.count]++;
+      schedules.push_back(schedule);
+      lollipop.destroy();
+      nodes_covered.insert(schedule.nodes.begin(),schedule.nodes.end());
+      //break;
+    }//for each lollipop
+
+    cout<<"- covered "<<nodes_covered.size()<<"/"<<m_num_valid_cells<<" cells,"
+        <<" schedule size="<<schedules.size()<<endl;
+
+    //if(m_num_valid_cells==nodes_covered.size())
+    // break; //done
+
+    for(auto s : states)
+    {
+      cout<<"count "<<s.first<<" has "<<s.second<<endl;
+    }
+  }//for data
+
+  //exit(1);
   //m_schedules=schedules;
   //return;
 
   //find optimal subset
   int total_chickens_needed=SolveLP(schedules, m_schedules);
   cout<<"- Best schedule needs "<<total_chickens_needed<<" chickens and "<<m_schedules.size()<<" tours"<<endl;
+
+  exit(1);
 }
 
 
@@ -514,7 +621,8 @@ MyPCoverPlanner::build_lollipops
   //optimize_lollipop_simple(lollipop,battery,latency);
   //optimize_lollipop_simple2(lollipop,battery,latency);
 
-cout<<"A"<<endl;
+  // lollipops.push_back(lollipop);
+  // return lollipops;
 
   //now expand the loop
   //int count=0;
@@ -523,11 +631,10 @@ cout<<"A"<<endl;
   open.insert(lollipop);
   while(open.empty()==false)
   {
+    //cout<<"open size="<<open.size()<<", closed size="<<closed.size()<<endl;
+
     Lollipop lollipop=*open.begin();
     open.erase(open.begin());
-
-cout<<"open size="<<open.size()<<endl;
-cout<<"closed size="<<closed.size()<<endl;
 
     float battery=this->m_battery-lollipop.entrance->time2station-lollipop.exit->time2station;
     float latency=this->m_latency-lollipop.entrance->time2station;
@@ -538,7 +645,10 @@ cout<<"closed size="<<closed.size()<<endl;
     //expand this lollipop, if failed, then close it
     if( !expand_lollipop(lollipop, open, battery,latency) )
     {
-      closed.insert(lollipop);
+      // if(optimize_lollipop_simple2(lollipop,battery,latency))
+      //   open.insert(lollipop);
+      // else
+        closed.insert(lollipop);
     }
   }
 
@@ -602,6 +712,7 @@ MyPCoverPlanner::lollipop2schedule(MyPCoverPlanner::Lollipop & lollipop)
       while(ptr->data!=lollipop.entrance) ptr=ptr->next;
       do
       {
+        //cout<<"ptr->data="<<ptr->data->id<<endl;
         schedule.push_back(ptr->data->pos);
         ptr=ptr->next;
       }
@@ -617,7 +728,7 @@ MyPCoverPlanner::lollipop2schedule(MyPCoverPlanner::Lollipop & lollipop)
     auto& returnpath=lollipop.exit->path2station;
     schedule.insert(schedule.end(),returnpath.rbegin(),returnpath.rend());
 
-    cout<<"lollipop count="<<lollipop.count<<endl;
+    //cout<<"lollipop count="<<lollipop.count<<endl;
     //cout<<"lollipop_nodes size="<<lollipop_nodes.size()<<endl;
     schedule.duration=lollipop.time_needed+lollipop.entrance->time2station+lollipop.exit->time2station;
     schedule.nodes=visitedNodes(schedule,0);
@@ -713,8 +824,8 @@ bool MyPCoverPlanner::expand_lollipop
 
   float new_cost=lollipop.time_needed + min_cost_increase;
   //cout<<"new_cost="<<new_cost<<" min_cost_increase="<<min_cost_increase<<endl;
-  if(new_cost> battery) return false; //exceeded needed power
-  if(new_cost> latency) return false; //exceeded time
+  if(new_cost>battery) return false; //exceeded needed power
+  if(new_cost>latency) return false; //exceeded time
 
   best->data->flag=lollipop.head->data->id;
   lollipop.insert(best);
@@ -723,63 +834,97 @@ bool MyPCoverPlanner::expand_lollipop
   return true;
 }
 
-
-
-bool MyPCoverPlanner::expand_lollipop
-(MyPCoverPlanner::Lollipop & lollipop, set<MyPCoverPlanner::Lollipop>& expand,
- float battery, float latency)
+MyPCoverPlanner::Lollipop_Node * MyPCoverPlanner::find_next_expansion
+(MyPCoverPlanner::Lollipop & lollipop, float battery, float latency)
 {
-cout<<"X"<<endl;
-  int expand_count=0;
+  //for each consecutive pair
   auto * ptr=lollipop.head;
   auto * next=ptr->next;
+  float min_cost_increase=FLT_MAX;
+  float min_dist=FLT_MAX;
+  Lollipop_Node * best=new Lollipop_Node();
 
-cout<<"A"<<endl;
+//cout<<"expand_lollipop next="<<next<<" head="<<lollipop.head<<endl;
 
-  //mark all nodes in the lollipop
-  auto flag=getFlag();
-  do{ ptr->data->flag=flag; ptr=ptr->next; }while(ptr!=lollipop.head);
-
-cout<<"B"<<endl;
-
-  //expand
-  ptr=lollipop.head;
-  do{
-    while(true)
-    {
-      auto n=getClosestCommonNeighbor(ptr->data,next->data);
-      Node * node = n.first;
-      if(node==NULL) break;
-      Lollipop_Node * ln=new Lollipop_Node(node);
-      assert(ln);
-      node->flag=flag; //important, so we don't get this node again
-      ln->data=node;
-      ln->pre=ptr;
-      ln->next=next;
-      ln->pre_cost=n.second.first;
-      ln->next_cost=n.second.second;
-
+  //while(next!=lollipop.head)
+  do
+  {
+    //pair< Node *, pair<float,float> > n
+    auto n=getClosestCommonNeighbor(ptr->data,next->data);
+    if(n.first!=NULL){
       float increase=n.second.first+n.second.second-ptr->next_cost;
-      float new_cost=lollipop.time_needed + increase;
-      if(new_cost> battery) return false; //exceeded needed power
-      if(new_cost> latency) return false; //exceeded time
-
-      auto lollipop2=lollipop.clone();
-      lollipop2.insert(ln);
-      expand.insert(lollipop2);
-      expand_count++;
+      //cout<<"\t add node "<<n.first->id<<" increase="<<increase<<endl;
+      if(increase<min_cost_increase ||
+         (min_cost_increase==increase && n.first->time2station>min_dist))
+      {
+        min_cost_increase=increase;
+        min_dist=n.first->time2station;
+        best->data=n.first;
+        best->pre=ptr;
+        best->next=next;
+        best->pre_cost=n.second.first;
+        best->next_cost=n.second.second;
+      }
     }
 
     ptr=next;
     next=ptr->next;
   }
-  while(ptr!=lollipop.head);
+  while(ptr!=lollipop.head); //end while
 
-cout<<"C"<<endl;
+  //
+  bool failed=false;
+  if(best->data==NULL) failed=true; //failed
+
+  float new_cost=lollipop.time_needed + min_cost_increase;
+  //cout<<"new_cost="<<new_cost<<" min_cost_increase="<<min_cost_increase<<endl;
+  if(new_cost>battery) failed=true; //exceeded needed power
+  if(new_cost>latency) failed=true; //exceeded time
+  if(failed){ delete best; return NULL; }
 
   //cout<<"expand ->"<<best->data->id<<" time need="<<lollipop.time_needed<<endl;
-  cout<<"expand_count="<<expand_count<<endl;
-  cout<<"expand size="<<expand.size()<<endl;
+  return best;
+}
+
+bool MyPCoverPlanner::expand_lollipop
+(MyPCoverPlanner::Lollipop & lollipop, set<MyPCoverPlanner::Lollipop>& expand,
+ float battery, float latency)
+{
+//cout<<"X"<<endl;
+  int expand_count=0;
+  auto * ptr=lollipop.head;
+  auto * next=ptr->next;
+
+//cout<<"A"<<endl;
+
+  //mark all nodes in the lollipop
+  auto flag=getFlag();
+  do{ ptr->data->flag=flag; ptr=ptr->next; }while(ptr!=lollipop.head);
+
+//cout<<"B"<<endl;
+
+  //expand
+  ptr=lollipop.head;
+  while(true)
+  {
+    Lollipop_Node * ln=find_next_expansion(lollipop,battery,latency);
+    if(ln==NULL) break;
+    ln->data->flag=flag;
+    auto lollipop2=lollipop.clone();
+    ln->pre=lollipop2.find(ln->pre->data);;
+    ln->next=lollipop2.find(ln->next->data);
+    lollipop2.insert(ln);
+    expand.insert(lollipop2);
+    expand_count++;
+  }
+
+//cout<<"C"<<endl;
+
+  //cout<<"expand ->"<<best->data->id<<" time need="<<lollipop.time_needed<<endl;
+  // cout<<"expand_count="<<expand_count<<endl;
+  // cout<<"expand size="<<expand.size()<<endl;
+  // cout<<"lollipop count="<<expand.begin()->count<<endl;
+
   return expand_count>0;
 }
 
@@ -1044,8 +1189,8 @@ bool MyPCoverPlanner::optimize_lollipop_simple2
     lollipop.entrance=best_pair.first;
     lollipop.exit=best_pair.second;
 
-    cout<<"lollipop.entrance="<<lollipop.entrance->id<<endl;
-    cout<<"lollipop.exit="<<lollipop.exit->id<<endl;
+    //cout<<"lollipop.entrance="<<lollipop.entrance->id<<endl;
+    //cout<<"lollipop.exit="<<lollipop.exit->id<<endl;
 
     lollipop.time_needed=min_time_needed-lollipop.entrance->time2station-lollipop.exit->time2station;
     //lollipop.best_tsp=best_tsp;
@@ -1484,7 +1629,7 @@ bool MyPCoverPlanner::SolveLP(
 	//parm.cb_func = callback;
 	parm.cb_info = this;
 
-	parm.tm_lim = 60000; //60 sec
+	parm.tm_lim = 600000; //600 sec
 	int err = glp_intopt(lp, &parm);
 	//cout << "err=" << err << endl;
 
@@ -1494,19 +1639,17 @@ bool MyPCoverPlanner::SolveLP(
 
 	//get mip status
 	int glp_prim_stat = glp_mip_status(lp);
-
 /*
 	switch (glp_prim_stat)
 	{
-	case GLP_OPT: cout << "solution is optimal;" << endl; break;
-	case GLP_FEAS: cout << "solution is feasible;" << endl; break;
-	case GLP_INFEAS: cout << "solution is infeasible;" << endl; break;
-	case GLP_NOFEAS: cout << "problem has no feasible solution;" << endl; break;
-	case GLP_UNBND: cout << "problem has unbounded solution;" << endl; break;
-	case GLP_UNDEF: cout << "solution is undefined." << endl; break;
+  	case GLP_OPT: cout << "solution is optimal;" << endl; break;
+  	case GLP_FEAS: cout << "solution is feasible;" << endl; break;
+  	case GLP_INFEAS: cout << "solution is infeasible;" << endl; break;
+  	case GLP_NOFEAS: cout << "problem has no feasible solution;" << endl; break;
+  	case GLP_UNBND: cout << "problem has unbounded solution;" << endl; break;
+  	case GLP_UNDEF: cout << "solution is undefined." << endl; break;
 	}
 */
-
 	bool solution_found = glp_prim_stat == GLP_OPT || glp_prim_stat == GLP_FEAS;
 
 	if (solution_found)
@@ -1676,8 +1819,6 @@ void MyPCoverPlanner::display()
 
   //draw nodes
   SDL_Rect box; //create a rect
-  box.w=(int)(getMyGame()->getScreenWidth()*0.50f/m_width);
-  box.h=(int)(getMyGame()->getScreenHeight()*0.50f/m_height);
 
   for(int i=0;i<m_height;i++)
   {
@@ -1689,6 +1830,8 @@ void MyPCoverPlanner::display()
       //draw node
       SDL_Renderer * renderer=getMyGame()->getRenderer();
 
+      box.w=(int)(getMyGame()->getScreenWidth()*0.50f/m_width);
+      box.h=(int)(getMyGame()->getScreenHeight()*0.50f/m_height);
       box.x = n.pos[0]-box.w/2;  //controls the rect's x coordinate
       box.y = n.pos[1]-box.h/2; // controls the rect's y coordinte
 
@@ -1705,21 +1848,28 @@ void MyPCoverPlanner::display()
         SDL_RenderFillRect(renderer,&box);
         SDL_SetRenderDrawBlendMode(renderer,SDL_BLENDMODE_NONE);
 
-        SDL_SetRenderDrawColor(renderer,0,250,0,0);
-        SDL_RenderDrawRect(renderer,&box);
+        //SDL_SetRenderDrawColor(renderer,0,150,0,0);
+        //SDL_RenderDrawRect(renderer,&box);
       }
 
+      box.w=(int)(getMyGame()->getScreenWidth()*0.9f/m_width);
+      box.h=(int)(getMyGame()->getScreenHeight()*0.9f/m_height);
+      box.x = n.pos[0]-box.w/2;  //controls the rect's x coordinate
+      box.y = n.pos[1]-box.h/2; // controls the rect's y coordinte
+      SDL_SetRenderDrawColor(renderer,100,100,100,0);
+      SDL_RenderDrawRect(renderer,&box);
+
       //draw connections
-      for(auto & N : n.neighbors)
-      {
-        Node * nei = N.first;
-        if(n.id>nei->id) continue;
-        if(n.parent==nei || nei->parent==&n)
-          SDL_SetRenderDrawColor(renderer,255,255,0,000);
-        else
-          SDL_SetRenderDrawColor(renderer,180,180,180,000);
-        SDL_RenderDrawLine(renderer, n.pos[0], n.pos[1], nei->pos[0], nei->pos[1]);
-      }
+      // for(auto & N : n.neighbors)
+      // {
+      //   Node * nei = N.first;
+      //   if(n.id>nei->id) continue;
+      //   // if(n.parent==nei || nei->parent==&n)
+      //   //   SDL_SetRenderDrawColor(renderer,255,255,0,000);
+      //   // else
+      //     SDL_SetRenderDrawColor(renderer,100,100,100,000);
+      //   SDL_RenderDrawLine(renderer, n.pos[0], n.pos[1], nei->pos[0], nei->pos[1]);
+      // }
     }
   }
 

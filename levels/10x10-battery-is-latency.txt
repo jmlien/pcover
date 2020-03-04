@@ -1,11 +1,11 @@
 40 40
 seed 10
 perlin 3 3 cubic 1 0.1 blend imgs/rock.jpeg imgs/water.jpeg
-method lollipop_lp2
+method tsp_greedy
 regions 10 10
 battery  5000
 charging 11000
-latency  6000
+latency  5000
 
 Objects
 b imgs/cannonball.png 0.0 0.15

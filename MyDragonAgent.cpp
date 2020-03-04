@@ -317,9 +317,19 @@ namespace GMUCS425
     const vector<MyPCoverPlanner::MySchedule>& schdules = pcover->getSchedules();
 
     //draw path in schedules
-    SDL_SetRenderDrawColor(renderer,200,0,0,100);
+    typedef mathtool::Point3d Point3d;
+    Point3d colors[10]={Point3d(255, 225, 25),Point3d(0, 130, 200),Point3d(245, 130, 48),
+                        Point3d(145, 30, 180),Point3d(240, 50, 230),Point3d(210, 245, 60),
+                        Point3d(250, 190, 190),
+                        Point3d(0, 128, 128),Point3d(170, 110, 40),Point3d(0, 0, 12)};
+
+    int k=0;
+
     for(auto& schdule : schdules)
     {
+      SDL_SetRenderDrawColor(renderer,colors[k][0],colors[k][1],colors[k][2],0);
+
+      k=(k+1)%10;
       //auto & waypt=schdule.front();
       //SDL_RenderDrawLine(renderer, x, y, waypt[0], waypt[1]);
       for(auto i = schdule.begin();i!=schdule.end();i++)
@@ -327,8 +337,10 @@ namespace GMUCS425
         auto j=i; j++;
         if(j==schdule.end()) continue;
         SDL_RenderDrawLine(renderer, (*i)[0], (*i)[1], (*j)[0], (*j)[1]);
+//        thickLineRGBA (renderer, (*i)[0], (*i)[1], (*j)[0], (*j)[1], 6, colors[k][0],colors[k][1],colors[k][2],0);
       }//end i
 
+      //break;
     }//end for schdule
 
     //MyAgent::display();
@@ -369,6 +381,7 @@ namespace GMUCS425
 
   void MyDragonAgent::draw_HUD()
   {
+    return;//draw nothing
     std::stringstream ss;
     ss<<"time: "<<getMyGame()->getTime()*0.01; //change to seconds
     SDL_Renderer * renderer=getMyGame()->getRenderer();
