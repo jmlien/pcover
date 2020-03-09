@@ -15,7 +15,27 @@ MyPathPlanner::MyPathPlanner(MyScene * scene, MyAgent * agent)
 //shorten and smooth the path
 void MyPathPlanner::smooth(std::list<Point2d>& path)
 {
+  if(path.size()<3) return;
+  auto pre=path.begin();
+  auto it=pre; it++;
+  auto next=it; next++;
+  bool shortened=false;
 
+  while( path.size()>=3 && next!=path.end() )
+  {
+    //check if
+    if( collision_detection(*pre, *next) ){
+      pre=it;
+      it=next;
+      next++;
+    }
+    else{
+      path.erase(it);
+      pre=path.begin();
+      it=pre; it++;
+      next=it; next++;
+    }
+  }//end while
 }
 
 //return true if m_agent collide with a non-movable object
@@ -39,6 +59,22 @@ bool MyPathPlanner::collision_detection(const Point2d& pos)
   //move the agent back
   m_agent->tranlateTo(pos_backup[0], pos_backup[1]);
   return collision;
+}
+
+
+
+//collision between two
+bool MyPathPlanner::collision_detection(const Point2d& pos1, const Point2d& pos2)
+{
+  Vector2d vec=(pos2-pos1);
+  float dist=vec.norm();
+  vec=vec/dist;
+  for(int i=0;i<dist;i++)
+  {
+    Point2d pos=pos1+vec*i;
+    if(collision_detection(pos)) return true;
+  }
+  return collision_detection(pos2);
 }
 
 //estimate the cost of travelling from pos1 to pos2

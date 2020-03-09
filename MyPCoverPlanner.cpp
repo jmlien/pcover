@@ -158,7 +158,7 @@ bool MyPCoverPlanner::schedule( const Point2d& start )
       schedule_hybrid(5);
   else{
     cerr<<"! Error: Unknown pcover optimization method: "<<m_opt_method<<endl;
-    return false;
+    exit(1);
   }
 
   //

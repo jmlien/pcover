@@ -29,6 +29,8 @@ protected:
   //at a given location
   bool collision_detection(const Point2d& pos);
 
+  bool collision_detection(const Point2d& pos1, const Point2d& pos2);
+
   //TODO:
   //estimate the cost of travelling from pos1 to pos2
   //using the values generate by Perlin noise

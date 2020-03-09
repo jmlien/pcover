@@ -239,6 +239,9 @@ namespace GMUCS425
     bool r=planner->find_path(s,g,path);
     if(!r) return 0;
 
+    //shorten the path
+    //planner->smooth(path);
+
     //compute length
     float length=0;
     for(auto it=path.begin();it!=path.end();it++)
@@ -247,6 +250,7 @@ namespace GMUCS425
       if(next==path.end()) break;
       length+=((*it)-(*next)).norm();
     }//end it
+
     return length;
   }
 
