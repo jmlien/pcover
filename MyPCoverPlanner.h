@@ -10,6 +10,9 @@ class MyDragonAgent;
 
 class MyPCoverPlanner
 {
+public:
+
+  struct MyTimedSchedule; //defined later
 
 protected:
 
@@ -51,6 +54,19 @@ protected:
       list<Node*> children;
       bool visited;
       float dist; //distance to root
+
+      //data for timed schedule
+
+      //PCover for this node
+      typedef list<MyTimedSchedule*> PCover;
+
+      //a vector of timed tours passing through this node
+      //float: arrivial time at this node
+      //MyTimedSchedule *: a schedule that arrived this node
+      vector< pair<float, MyTimedSchedule*> > timed_schedules;
+
+      // a list of valid PCover for this node
+      list<PCover> valid_pcovers;
   };
 
   static bool compareNode(const Node * n1, const Node * n2)
@@ -65,6 +81,16 @@ protected:
     exit(1);
   }
 
+  //same as getWeight but wont exit if n1 and n2 are not neighbors
+  float getWeight_no_exit(Node * n1, Node * n2)
+  {
+    if(n1==n2) return 0;
+    for(auto nei : n1->neighbors){
+      if(nei.first==n2) return nei.second;
+    }
+    return -FLT_MAX;
+  }
+
 public:
 
   struct MySchedule : public list<Point2d>
@@ -77,6 +103,19 @@ public:
     int chicken_needed;
   };
 
+  //schedule with information of arrivial times for visited nodes
+  struct MyTimedSchedule : public MySchedule
+  {
+    MyTimedSchedule(){ start_time=0; }
+    MyTimedSchedule(const MySchedule& schedule){
+      nodes=schedule.nodes;
+      duration=schedule.duration;
+      chicken_needed=schedule.chicken_needed;
+      start_time=0;
+    }
+    list<float> arrival_times; //one for each node
+    float start_time;
+  };
 
   ///--------------------------------------------------
 
@@ -123,8 +162,9 @@ public:
   Node * getChargingStation() { return m_charging_station; }
   Point2d getChargingStationPosition(){ return m_charging_station->pos; }
 
-  //get computed schedule
+  //get computed schedules
   const vector<MySchedule> & getSchedules() const { return m_schedules; }
+  const vector<MyTimedSchedule> & getTimedSchedules() const { return m_timed_schedules; }
 
 protected:
 
@@ -312,28 +352,51 @@ protected:
     Node * entrance, * exit;
   };
 
-  //build a lollipop tour and return the time needed
+  //build a lollipop tour
   Lollipop build_lollipop(Node * n, float start_time);
+  //build multiple lollipop tours
   vector<Lollipop> build_lollipops(Node * n, float start_time);
+  //build multiple lollipop tour only considering battery constraint
+  vector<Lollipop> build_lollipops_ignoring_latency(Node * n);
+  //create an initial lollipop
   Lollipop init_lollipop(Node * n, float battery, float latency);
 
+  //expand the given lollipop
   bool expand_lollipop(Lollipop & lollipop, float battery, float latency);
+  //expand the given lollipop into multiple lollipops
   bool expand_lollipop(Lollipop & lollipop, set<Lollipop>& expand, float battery, float latency);
+  //find a Lollipop_Node that the given lollipop can expand to
+  //NOTE: this function can return different node for the same lollipop
+  //      by manipulating node->flag
   Lollipop_Node * find_next_expansion(Lollipop & lollipop, float battery, float latency);
 
+  //sometimes we can reduce the travel time of a given lollipop
   bool optimize_lollipop(Lollipop & lollipop, float battery, float latency);
   bool optimize_lollipop_simple(Lollipop & lollipop, float battery, float latency);
   bool optimize_lollipop_simple2(Lollipop & lollipop, float battery, float latency);
+
+  //convert a lollipop to a schedule
   MySchedule lollipop2schedule(Lollipop & lollipop);
+
+  //convert a schedule to a vector of timed schedules
+  void schedule2timedschedules(MySchedule & base, vector<MyTimedSchedule>& Tschedules);
+
+  //build a list of valid pcovers for each node
+  //post: fills list< Node::PCover > valid_pcovers
+  void build_pcovers_from_timed_schedules(Node * n);
+
+  //check if a node pcover is valid
+  bool valid_node_pcover(list<vector< pair<float,MyTimedSchedule*> >::iterator> & pcover);
+
   //check if the schedule time is valid
   //bool isvalid(MySchedule& s, Node * new_n);
-
 
 
   struct LP_constraints
   {
     LP_constraints(){ type = 1;  upper_bound = lower_bound = 0; }
     vector<int> vids; //varibles involed in this constraint
+    vector<float> coeffs; //coefficient for each variable, if empty, coeffs are 1
 
     int type;  //GLP_FR    free (unbounded) variable, (1)
            //GLP_LO    lower bound
@@ -360,6 +423,9 @@ protected:
               list<LP_constraints>& constaints,
               vector<float>& solution);
 
+
+  //find the optimal subset of timed schdules from node pcovers
+  int SolveLP(vector<MyTimedSchedule>& opt);
 
   //compute a matrix represention of the graph
   typedef vector< pair<Node *, float> > TSP; //<node, time>
@@ -450,6 +516,7 @@ protected:
      }
      return best;
    }
+
   //------------>
   float traceback(Node * n, list<Node *>& path);
 
@@ -465,13 +532,12 @@ protected:
   float m_charging; //the charging constraint, in milliseconds
   Node * m_charging_station;
   string m_opt_method; //optimization method specified
-  vector<MySchedule> m_schedules; //one for each chicken
+  vector<MySchedule> m_schedules; //may have multiple chickens
+  vector<MyTimedSchedule> m_timed_schedules; //one for each chicken
 
 
   static int PCOVER_FLAG;
   int getFlag(){ return PCOVER_FLAG--;}
-//  TSP_FLAG--; //a unique flag for each TSP call
-
 };
 
 }//end namespace GMUCS425
