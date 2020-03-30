@@ -1,10 +1,10 @@
 40 40
-seed 10
+seed 8
 perlin 3 3 cubic 1 0.1 blend imgs/rock.jpeg imgs/water.jpeg
-method tsp_greedy
+method shortest_lp
 regions 10 10
-battery  6000
-charging 12000
+battery  5000
+charging 11000
 latency  2500
 
 Objects

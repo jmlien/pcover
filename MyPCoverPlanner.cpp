@@ -161,6 +161,7 @@ bool MyPCoverPlanner::schedule( const Point2d& start )
     exit(1);
   }
 
+exit(1);
   //
   return true;
 }
@@ -493,7 +494,7 @@ bool MyPCoverPlanner::schedule_hybrid(int trials)
     {
       Node & n=m_grid[i][j];
       if(!n.free) continue; //this node is in collision, no neighbors
-      //if(&n==this->m_charging_station) continue;
+      if(&n==this->m_charging_station) continue;
       sorted_nodes.push_back(make_pair(-n.dist2station, &n));
     }//end j
   }//end i
@@ -518,7 +519,7 @@ bool MyPCoverPlanner::schedule_hybrid(int trials)
         <<" schedule size="<<schedules.size()<<endl;
 
     if(m_num_valid_cells==nodes_covered.size())
-      break; //done
+     break; //done
   }//for data
 
   int total_chickens_needed=SolveLP(schedules,m_schedules);

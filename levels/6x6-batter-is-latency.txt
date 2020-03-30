@@ -1,7 +1,7 @@
 40 40
 seed 10
 perlin 3 3 cubic 1 0.1 blend imgs/rock.jpeg imgs/water.jpeg
-method tsp_tsp
+method shortest_lp
 regions 6 6
 battery  5000
 charging 11000
