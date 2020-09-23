@@ -28,7 +28,6 @@ class MyTexture
 			free();
 		}
 
-		//TODO:
 		//blend this and other textures and create a new blended texture
 		//using the given mask. Note: all textures and the mask must have
 		//the same dimension

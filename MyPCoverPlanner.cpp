@@ -161,7 +161,7 @@ bool MyPCoverPlanner::schedule( const Point2d& start )
     exit(1);
   }
 
-exit(1);
+//exit(1);
   //
   return true;
 }
@@ -200,7 +200,7 @@ void MyPCoverPlanner::schedule_shorest_paths_lp()
 
   //find optimal subset
   int total_chickens_needed=SolveLP(schedules, m_schedules);
-  cout<<"- Best schedule needs "<<total_chickens_needed<<" chickens and "<<m_schedules.size()<<" tours"<<endl;
+  cout<<"- Best schedule needs "<<total_chickens_needed<<" UAVs and "<<m_schedules.size()<<" tours"<<endl;
 }
 
 bool MyPCoverPlanner::schedule_tsp_segments_lp(int trials)
@@ -262,7 +262,7 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp(int trials)
     int total_chickens_needed=SolveLP(schedules,m_schedules);
     //check if this schedule is better
     //cout<<"trial #"<<i<<" needs "<<total_chickens_needed<<" chickens"<<endl;
-    cout<<total_chickens_needed<<endl;
+    //cout<<total_chickens_needed<<endl;
     if(total_chickens_needed<min_chickens_needed)
     {
       min_chickens_needed=total_chickens_needed;
@@ -274,7 +274,7 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp(int trials)
   //failed...no LP solved
   if(min_chickens_needed==INT_MAX) return false;
 
-  cout<<"- Best schedule needs "<<min_chickens_needed<<" chickens and "<<best_m_schedules.size()<<" tours"<<endl;
+  cout<<"- Best schedule needs "<<min_chickens_needed<<" UAVs and "<<best_m_schedules.size()<<" tours"<<endl;
   m_schedules=best_m_schedules;
   return true;
 
@@ -297,7 +297,7 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp2(int trials)
     }//end for tour
   }
 
-#if 0
+#if 00
   //
   vector<MyTimedSchedule> tschedules;
   for(auto& schedule : schedules) schedule2timedschedules(schedule,tschedules);
@@ -308,11 +308,11 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp2(int trials)
   {
     assert(ts.arrival_times.size()==ts.nodes.size());
     auto atime=ts.arrival_times.begin();
-    cout<<"TS="<<&ts;
+    //cout<<"TS="<<&ts;
     for(Node * node : ts.nodes)
     {
       node->timed_schedules.push_back(make_pair(*atime,&ts));
-      cout<<" visiting node="<<node->id<<" arrival="<<*atime<<endl;
+      //cout<<" visiting node="<<node->id<<" arrival="<<*atime<<endl;
       atime++;
     }
   }
@@ -333,7 +333,7 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp2(int trials)
   int total_chickens_needed=SolveLP(schedules,m_schedules);
 
   cout<<"- Best schedule needs "<<total_chickens_needed
-      <<" chickens and "<<m_schedules.size()<<" tours"<<endl;
+      <<" UAVs and "<<m_schedules.size()<<" tours"<<endl;
 
   return true;
 }//end MyPCoverPlanner
@@ -371,7 +371,7 @@ void MyPCoverPlanner::schedule_tsp_segments_greedy(int trials)
     }//end for tour
 
     //cout<<"trial #"<<i<<" needs "<<total_chickens_needed<<" chickens"<<endl;
-    cout<<total_chickens_needed<<endl;
+    //cout<<total_chickens_needed<<endl;
     if(total_chickens_needed<min_chickens_needed)
     {
       min_chickens_needed=total_chickens_needed;
@@ -379,8 +379,11 @@ void MyPCoverPlanner::schedule_tsp_segments_greedy(int trials)
     }
   }//end for i trials
 
-  cout<<"- Best schedule needs "<<min_chickens_needed<<" chickens and "<<best_m_schedules.size()<<" tours"<<endl;
+  cout<<"- Best schedule needs "<<min_chickens_needed<<" UAVs and "<<best_m_schedules.size()<<" tours"<<endl;
   m_schedules=best_m_schedules;
+
+  //for displaying failed scenarios
+  //for(auto & schedule : m_schedules) schedule.chicken_needed/=2;
 }
 
 //lollipop tours
@@ -431,7 +434,7 @@ void MyPCoverPlanner::schedule_dijkstra_lp()
 
   //find optimal subset
   int total_chickens_needed=SolveLP(schedules, m_schedules);
-  cout<<"- Best schedule needs "<<total_chickens_needed<<" chickens and "<<m_schedules.size()<<" tours"<<endl;
+  cout<<"- Best schedule needs "<<total_chickens_needed<<" UAVs and "<<m_schedules.size()<<" tours"<<endl;
 }
 
 //lollipop tours
@@ -464,7 +467,7 @@ void MyPCoverPlanner::schedule_lollipop_lp()
 
   //find optimal subset
   int total_chickens_needed=SolveLP(schedules, m_schedules);
-  cout<<"- Best schedule needs "<<total_chickens_needed<<" chickens and "<<m_schedules.size()<<" tours"<<endl;
+  cout<<"- Best schedule needs "<<total_chickens_needed<<" UAVs and "<<m_schedules.size()<<" tours"<<endl;
 }
 
 
@@ -525,7 +528,7 @@ bool MyPCoverPlanner::schedule_hybrid(int trials)
   int total_chickens_needed=SolveLP(schedules,m_schedules);
 
   cout<<"- Best schedule needs "<<total_chickens_needed
-      <<" chickens and "<<m_schedules.size()<<" tours"<<endl;
+      <<" UAVs and "<<m_schedules.size()<<" tours"<<endl;
 
   return true;
 }//end MyPCoverPlanner
@@ -599,7 +602,7 @@ void MyPCoverPlanner::schedule_lollipop_lp2()
 
   //find optimal subset
   int total_chickens_needed=SolveLP(schedules, m_schedules);
-  cout<<"- Best schedule needs "<<total_chickens_needed<<" chickens and "<<m_schedules.size()<<" tours"<<endl;
+  cout<<"- Best schedule needs "<<total_chickens_needed<<" UAVs and "<<m_schedules.size()<<" tours"<<endl;
 
   exit(1);
 }
@@ -754,7 +757,7 @@ MyPCoverPlanner::schedule2timedschedules
 
     int chicken_needed=schedule.chicken_needed;
     schedule.chicken_needed=1;
-    float cur_time=drand48()*0.001f;
+    double cur_time=drand48()*0.01;
     schedule.start_time=cur_time;
 
     cout<<"schedule.start_time="<<schedule.start_time<<endl;
@@ -779,12 +782,12 @@ MyPCoverPlanner::schedule2timedschedules
     schedule.nodes.swap(no_repeats);
     Tschedules.push_back(schedule);
 
-    //create the rest timed schedules offset by the latency
-    for(int i=1;i<chicken_needed;i++)
+    //create the rest of timed schedules offset by the latency
+    for(int i=1;i<=chicken_needed;i++)
     {
       schedule.start_time+=m_latency;
-      list<float> arrival_times;
-      for(float t : schedule.arrival_times)
+      list<double> arrival_times;
+      for(double t : schedule.arrival_times)
           arrival_times.push_back(t+m_latency);
       schedule.arrival_times.swap(arrival_times);
       Tschedules.push_back(schedule);
@@ -883,10 +886,23 @@ MyPCoverPlanner::Lollipop MyPCoverPlanner::init_lollipop
 void MyPCoverPlanner::build_pcovers_from_timed_schedules
 (MyPCoverPlanner::Node * n)
 {
-  //sort by arrival time
+  cout<<"start to sort "<<n->timed_schedules.size()<<" timed schedules"<<endl;
+
+  //sort by arrival time (not sure why this is so slow....)
   sort(n->timed_schedules.begin(),n->timed_schedules.end());
-  typedef vector< pair<float,MyTimedSchedule*> >::iterator IT;
+  typedef vector< pair<double,MyTimedSchedule*> >::iterator IT;
   typedef list<IT> IT_LIST;
+
+  // cout<<"after sorting: ";
+  // std::cout.precision(15);
+  // int count=0;
+  // for(auto& tmp : n->timed_schedules){
+  //   cout<<"("<<tmp.first<<","<<tmp.second<<");";
+  //   if(count++>10) break;
+  // }
+  // cout<<endl;
+
+  cout<<"n "<<n->id<<" has "<<n->timed_schedules.size()<<" timed schedules and ";
 
   // cout<<"TS:";
   // for(auto it=n->timed_schedules.begin();it!=n->timed_schedules.end();it++)
@@ -896,7 +912,7 @@ void MyPCoverPlanner::build_pcovers_from_timed_schedules
   //go through each tour in the acsending order
   for(auto it=n->timed_schedules.begin();it!=n->timed_schedules.end();it++)
   {
-    if(it->first>m_latency) break; //toue arriving the node too late
+    if(it->first>m_latency) break; //tour arriving the node too late
     IT_LIST valid_pcover;
 
     //add the tour as the first to arrive
@@ -940,6 +956,9 @@ void MyPCoverPlanner::build_pcovers_from_timed_schedules
       set<MyTimedSchedule*> tmp;
       for(auto entry : valid_pcover) tmp.insert(entry->second);
       Node::PCover pcover(tmp.begin(),tmp.end());
+
+      //???? is the MyTimedSchedule* sorted? as set_diff requires sorted values
+      sort(pcover.begin(), pcover.end());
 /*
       if(pcover.size()==2 && pcover.front()==pcover.back())
       {
@@ -953,6 +972,10 @@ void MyPCoverPlanner::build_pcovers_from_timed_schedules
       }
   */
 
+
+      ///check is pcover dominates an earlier pcover
+      ///a pcover A dominates a second pcover B if A is a subset of B
+      ///ie. A can pcover the node with just a subset of B
       bool dominated=false;;
       for(Node::PCover & o : n->valid_pcovers)
       {
@@ -961,12 +984,14 @@ void MyPCoverPlanner::build_pcovers_from_timed_schedules
           if(diff.empty()){ dominated=true; break; } //o is subset of pcover
       }
 
-      if(!dominated)
+      //pcover is ignored if pcover is dominated.
+      if(!dominated) //pcover is NOT domindate
       {
         //remove those dominiated by pcover
         list<Node::PCover> tmp;
         for(Node::PCover & o : n->valid_pcovers)
         {
+            if(o.size()<pcover.size()){ tmp.push_back(o); continue; } //pcover cannot dominate o if o has fewer schedules
             Node::PCover diff;
             set_difference(pcover.begin(), pcover.end(), o.begin(),o.end(), std::inserter(diff, diff.begin()));
             if(!diff.empty()){ tmp.push_back(o); }
@@ -974,14 +999,13 @@ void MyPCoverPlanner::build_pcovers_from_timed_schedules
         tmp.push_back(pcover);
         n->valid_pcovers.swap(tmp);
       }
+
     }//end if
 
   }//end for auto it
 
 
-  cout<<"n "<<n->id<<" has "<<n->valid_pcovers.size()<<" pcovers and "
-      <<n->timed_schedules.size()<<" timed schedules"<<endl;
-
+  cout<<n->valid_pcovers.size()<<" pcovers"<<endl;
   //exit(1);
 }
 
@@ -1765,6 +1789,8 @@ bool MyPCoverPlanner::SolveLP(
 {
 	int constraint_size = constaints.size();
 	int variable_size = schdules.size();
+
+  cout<<"constraint_size="<<constraint_size<<" variable_size="<<variable_size<<endl;
   glp_term_out(GLP_OFF);
 
 	glp_prob * lp = glp_create_prob();
@@ -1886,7 +1912,7 @@ bool MyPCoverPlanner::SolveLP(
 int MyPCoverPlanner::SolveLP(vector<MyTimedSchedule>& opt)
 {
   //build a list of Node::PCover for each node
-  map<MyTimedSchedule *, int> timed_schedules;  //variables #1
+  unordered_map<MyTimedSchedule *, int> timed_schedules;  //variables #1
   map<Node::PCover, int> node_pcovers;  //variables #2
   list<Node *> nodes;
 
@@ -1915,7 +1941,6 @@ int MyPCoverPlanner::SolveLP(vector<MyTimedSchedule>& opt)
   int schedule_id=0;
   for(auto & ts : timed_schedules) ts.second=schedule_id++;
 
-  cout<<"----> ts_size="<<ts_size<<endl;
   int pcover_id=ts_size;
   for(auto & pc : node_pcovers) pc.second=pcover_id++;
 
@@ -1924,7 +1949,7 @@ int MyPCoverPlanner::SolveLP(vector<MyTimedSchedule>& opt)
   vector<float> solution; //0/1
   int total_chickens_needed=0;
   //create constraints, type 1
-  //make sure that everyone is covered
+  //make sure that every nodeis covered at least once
   for(Node * n : nodes)
   {
     LP_constraints lpc;
@@ -1959,7 +1984,10 @@ int MyPCoverPlanner::SolveLP(vector<MyTimedSchedule>& opt)
   //now setup LP....
   int constraint_size = constraints.size();
 	int variable_size = timed_schedules.size() + node_pcovers.size();
-  cout<<"node pcover size="<<node_pcovers.size()<<endl;
+
+
+  cout<<"constraint_size="<<constraint_size<<" variable_size="<<variable_size<<endl;
+
   //glp_term_out(GLP_OFF);
 
 	glp_prob * lp = glp_create_prob();
@@ -2042,7 +2070,7 @@ int MyPCoverPlanner::SolveLP(vector<MyTimedSchedule>& opt)
 	//parm.cb_func = callback;
 	parm.cb_info = this;
 
-	parm.tm_lim = 1800000; //1800 sec
+	parm.tm_lim = 18000000; //1800 sec
 	int err = glp_intopt(lp, &parm);
 	//cout << "err=" << err << endl;
 
@@ -2253,13 +2281,13 @@ void MyPCoverPlanner::display()
       box.y = n.pos[1]-box.h/2; // controls the rect's y coordinte
 
       if(n.b_charging_station){
-        SDL_SetRenderDrawColor(renderer,0,250,0,0);
+        SDL_SetRenderDrawColor(renderer,0,250,0,0); //green
         SDL_RenderFillRect(renderer,&box);
       }
       else{
         SDL_SetRenderDrawBlendMode(renderer,SDL_BLENDMODE_BLEND);
         //cout<<m_latency<<endl;
-        float s= 0; //std::min(1.0f, n.t*1.0f/m_latency);
+        float s= std::min(1.0f, n.t*1.0f/m_latency);
         if(s<1) SDL_SetRenderDrawColor(renderer,200,0,0,s*s*255);
         else SDL_SetRenderDrawColor(renderer,0,0,0,255);
         SDL_RenderFillRect(renderer,&box);
@@ -2269,11 +2297,12 @@ void MyPCoverPlanner::display()
         //SDL_RenderDrawRect(renderer,&box);
       }
 
+      //draw the boundary
       box.w=(int)(getMyGame()->getScreenWidth()*0.9f/m_width);
       box.h=(int)(getMyGame()->getScreenHeight()*0.9f/m_height);
       box.x = n.pos[0]-box.w/2;  //controls the rect's x coordinate
       box.y = n.pos[1]-box.h/2; // controls the rect's y coordinte
-      SDL_SetRenderDrawColor(renderer,100,100,100,0);
+      SDL_SetRenderDrawColor(renderer,50,50,100,0);
       SDL_RenderDrawRect(renderer,&box);
 
       //draw connections
@@ -2347,7 +2376,7 @@ MyPCoverPlanner::visitedNodes(const list<Point2d>& path, float arrival_time)
 //a simple helper methods that check if a node pcover
 //(in the form of iterators) is valid
 bool MyPCoverPlanner::valid_node_pcover
-(list<vector< pair<float,MyPCoverPlanner::MyTimedSchedule*> >::iterator> & pcover)
+(list<vector< pair<double,MyPCoverPlanner::MyTimedSchedule*> >::iterator> & pcover)
 {
   auto first_uav=pcover.front();
   auto last_uav=pcover.back();

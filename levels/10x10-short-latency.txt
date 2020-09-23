@@ -1,7 +1,7 @@
 40 40
 seed 1
 perlin 3 3 cubic 1 0.1 blend imgs/rock.jpeg imgs/water.jpeg
-method shortest_lp
+method tsp_lp2
 regions 10 10
 battery  5000
 charging 11000
@@ -29,7 +29,7 @@ oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 ooooooooooooooooooooooooooooootooooooooo
 oooooooooooooooooooooooooooooooooooooooo
-oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooodooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 ooooooooootooooooooooooooooooooooooooooo
 ootooooooooooooooooooooooooooooooooooooo
@@ -42,7 +42,7 @@ oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
-oooooooooooodooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooootoooo

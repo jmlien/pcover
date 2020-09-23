@@ -64,7 +64,7 @@ namespace GMUCS425
       if(m_path.empty() || (m_battery<=0 && is_inside_charing_station()) )
       {
         m_state='c';
-        cout<<"- chicken arrived at charging base with battery: "<<m_battery<<endl;
+        cout<<"- UAV arrived at charging base with battery: "<<m_battery<<endl;
         m_charging_time_left=m_charging_time;
         assert(m_pcover);
         //move the chicken to the center
@@ -77,7 +77,7 @@ namespace GMUCS425
         if(m_battery<=0) //out of battery
         {
           m_state='f'; //failed
-          cout<<"- chicken failed with no battery left..."<<endl;
+          cout<<"- UAV failed with no battery left..."<<endl;
         }
         else //still has some power
         {
@@ -100,7 +100,7 @@ namespace GMUCS425
         m_charging_time_left=0;
         m_state='i';
         m_path=m_path_bkup;
-        cout<<"- chicken fully charged, ready to serve!"<<endl;
+        cout<<"- UAV fully charged, ready to serve!"<<endl;
       }
     }
 

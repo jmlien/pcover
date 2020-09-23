@@ -1,11 +1,11 @@
 40 40
-seed 10
-perlin 3 3 cubic 1 0.1 blend  imgs/grass.png imgs/rock.jpeg
+seed 1
+perlin 3 3 cubic 1 0.1 blend imgs/rock.jpeg imgs/water.jpeg
 method tsp_lp2
-regions 6 6
+regions 20 20
 battery  5000
 charging 11000
-latency  20000
+latency  3000
 
 Objects
 b imgs/cannonball.png 0.0 0.15
@@ -14,7 +14,7 @@ w imgs/brick.png 0.0 0.2
 
 Characters
 z imgs/zombie.png 0.05
-k imgs/drone.png  0.3
+k imgs/chicken.png  0.1
 d imgs/dragon.png 0.08
 
 
@@ -29,9 +29,10 @@ oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 ooooooooooooooooooooooooooooootooooooooo
 oooooooooooooooooooooooooooooooooooooooo
-oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooodooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 ooooooooootooooooooooooooooooooooooooooo
+ootooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
@@ -42,7 +43,6 @@ oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
-oooooooooooodooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooootoooo

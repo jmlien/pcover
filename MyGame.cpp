@@ -64,6 +64,7 @@ namespace GMUCS425
 						cerr<<"ERROR: SDL_ttf could not initialize! SDL_ttf Error:  "<<TTF_GetError()<<endl;
 						success = false;
 					}
+										
 				}
 			}
 		}

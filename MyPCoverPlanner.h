@@ -8,6 +8,22 @@ namespace GMUCS425
 
 class MyDragonAgent;
 
+//a simple dummy graph
+class MyBasicGraph {
+
+  struct Node{
+    int id;
+    mathtool::Point2d pos;
+  };
+
+  int add_node(const mathtool::Point2d& pos){ Node n; n.pos=pos; n.id=nodes.size(); nodes.push_back(n); return n.id; }
+  void add_edge(int s, int e, float weight){ edges.push_back( make_pair(make_pair(s,e),weight)); }
+
+  vector< pair< pair<int,int>, float> > edges;
+  vector<Node> nodes;
+};
+
+//the main persistent covering planner
 class MyPCoverPlanner
 {
 public:
@@ -55,15 +71,17 @@ protected:
       bool visited;
       float dist; //distance to root
 
-      //data for timed schedule
+      //
+      // data for timed schedule
+      //
 
       //PCover for this node
-      typedef list<MyTimedSchedule*> PCover;
+      typedef vector<MyTimedSchedule*> PCover;
 
       //a vector of timed tours passing through this node
       //float: arrivial time at this node
       //MyTimedSchedule *: a schedule that arrived this node
-      vector< pair<float, MyTimedSchedule*> > timed_schedules;
+      vector< pair<double, MyTimedSchedule*> > timed_schedules;
 
       // a list of valid PCover for this node
       list<PCover> valid_pcovers;
@@ -82,6 +100,7 @@ protected:
   }
 
   //same as getWeight but wont exit if n1 and n2 are not neighbors
+  //return -FLT_MAX when no edge connecting n1 & n2
   float getWeight_no_exit(Node * n1, Node * n2)
   {
     if(n1==n2) return 0;
@@ -113,8 +132,8 @@ public:
       chicken_needed=schedule.chicken_needed;
       start_time=0;
     }
-    list<float> arrival_times; //one for each node
-    float start_time;
+    list<double> arrival_times; //one for each node, so nodes.size==arrival_times.size
+    double start_time;
   };
 
   ///--------------------------------------------------
@@ -386,7 +405,7 @@ protected:
   void build_pcovers_from_timed_schedules(Node * n);
 
   //check if a node pcover is valid
-  bool valid_node_pcover(list<vector< pair<float,MyTimedSchedule*> >::iterator> & pcover);
+  bool valid_node_pcover(list<vector< pair<double,MyTimedSchedule*> >::iterator> & pcover);
 
   //check if the schedule time is valid
   //bool isvalid(MySchedule& s, Node * new_n);
@@ -467,10 +486,10 @@ protected:
          if(nei1.first==nei2.first)
          {
            Node * nei=nei1.first;
-         //cout<<"nei id="<<nei->id<<" flag="<<nei->flag<<endl;
+           //cout<<"nei id="<<nei->id<<" flag="<<nei->flag<<endl;
            if(nei->flag==flag) continue; //already included
            //we want the nei to be further away from n1 and n2
-         //cout<<"nei dist="<<nei->dist<<" n1->dist="<<n1->dist<<" n2->dist="<<n2->dist<<endl;
+           //cout<<"nei dist="<<nei->dist<<" n1->dist="<<n1->dist<<" n2->dist="<<n2->dist<<endl;
            //if( (strict_level==1) && (nei->dist<=n1->dist || nei->dist<=n2->dist) ) continue;
            //if( (strict_level==2) && (nei->dist<=n1->dist && nei->dist<=n2->dist) ) continue;
            if( (strict_level==1) && (nei->time2station<n1->time2station || nei->time2station<n2->time2station) ) continue;

@@ -4,31 +4,25 @@
 
 namespace GMUCS425
 {
-  //TODO:
   //blend this and other textures and create a new blended texture
   //using the given mask. Note: all textures and the mask must have
   //the same dimension
   MyTexture * MyTexture::blend(MyTexture * other, Uint32 * mask)
   {
-    Uint32 * newimg=new Uint32[mHeight*mWidth];
-    assert(newimg);
+    SDL_Renderer * renderer=getMyGame()->getRenderer();
 
-    void* tmp;
-    Uint32 * pixels_this, * pixels_other;
-    int pitch_this, pitch_other;
-    if(SDL_LockTexture( this->mTexture, NULL, &tmp, &pitch_this )!=0)
-    {
-      std::cerr<< "! Error: MyTexture::blend: Failed to lock this texture! "<<SDL_GetError()<<std::endl;
-      return NULL;
-    }
-    pixels_this=(Uint32*)tmp;
+    Uint32 * pixels_this =new Uint32[mHeight*mWidth];
+    Uint32 * pixels_other=new Uint32[mHeight*mWidth];
 
-    if(SDL_LockTexture( other->mTexture, NULL, &tmp, &pitch_other )!=0)
-    {
-      std::cerr<< "! Error: MyTexture::blend: Failed to lock other texture! "<<SDL_GetError()<<std::endl;
-      return NULL;
-    }
-    pixels_other=(Uint32*)tmp;
+    assert(pixels_this && pixels_other);
+
+    //render this image and then read pixels back
+    this->render(0,0);
+    SDL_RenderReadPixels(renderer,NULL,SDL_PIXELFORMAT_ARGB8888,(void*)pixels_this, sizeof(Uint32)*mWidth);
+
+    //render that image and then read pixels back
+    other->render(0,0);
+    SDL_RenderReadPixels(renderer,NULL,SDL_PIXELFORMAT_ARGB8888,(void*)pixels_other, sizeof(Uint32)*mWidth);
 
     Uint32 format = SDL_GetWindowPixelFormat( getMyGame()->getWindow() );
     SDL_PixelFormat* mappingFormat = SDL_AllocFormat( format );
@@ -40,7 +34,7 @@ namespace GMUCS425
         int i=h*mWidth+w;
         float s=(mask[i] & 255)*1.0/255;
         s=3*s*s-2*s*s*s;
-        //s=0;
+
 
         Uint8 ir,ig,ib,ia,o_r,og,ob,oa;
         SDL_GetRGBA(pixels_this[i], mappingFormat,&ir,&ig,&ib,&ia);
@@ -50,23 +44,24 @@ namespace GMUCS425
         Uint8 g=ig+(Uint8)(s*(og-ig));
         Uint8 b=ib+(Uint8)(s*(ob-ib));
         Uint8 a=ia+(Uint8)(s*(oa-ia));
-        newimg[i] = SDL_MapRGBA( mappingFormat, r, g, b, a );
 
-        //std::cout<<"s="<<s<<std::endl;
-        //newimg[i]= pixels_this[i] + (Uint32)(s*(pixels_other[i]-pixels_this[i]));
+        pixels_this[i] = SDL_MapRGBA( mappingFormat, r, g, b, a );
       }
     }
 
     //Lock texture for manipulation
 
     //Unlock texture to update
-    SDL_UnlockTexture( this->mTexture );
-    SDL_UnlockTexture( other->mTexture );
-    //SDL_FreeFormat( mappingFormat );
+    // SDL_UnlockTexture( this->mTexture );
+    // SDL_UnlockTexture( other->mTexture );
+    SDL_FreeFormat( mappingFormat );
 
     //Loads image from a given buffer
     MyTexture * newtext=new MyTexture();
-		newtext->loadFromBuffer( newimg, mWidth, mHeight );
+		newtext->loadFromBuffer( pixels_this, mWidth, mHeight );
+
+    delete [] pixels_this;
+    delete [] pixels_other;
 
     return newtext; //replace this line
   }

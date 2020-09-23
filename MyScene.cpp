@@ -255,6 +255,7 @@ bool MyScene::create( std::istream & inputfile)
     {
       inputfile >> c;			// read one char at a time
       buf = c + '\0';			// convert char to string
+
       rent = objs[buf];		// find cooresponding object or agent
       if (rent != NULL)		// it might not be an agent or object
       {
@@ -266,9 +267,12 @@ bool MyScene::create( std::istream & inputfile)
         else if(c=='k'){
           agent = new MyChickenAgent(battery,charging_time);
         }
-        else if(c=='d')
+        else if(c=='d'){
           agent = new MyDragonAgent(pcover_method, battery,charging_time,latency,pcover_grid_width,pcover_grid_height);
-        else agent = new MyAgent(rent->agent);
+          ((MyDragonAgent*)agent)->setChickenInfo("k", objs["k"]->scale);
+        }
+        else 
+          agent = new MyAgent(rent->agent);
 
         assert(agent);
         MySprite * sprite=sprite_manager->get(buf);

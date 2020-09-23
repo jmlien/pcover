@@ -5,7 +5,10 @@
 #include "MyPCoverPlanner.h"
 #include <SDL_image.h>
 #include <SDL_ttf.h>
+#include <SDL2_gfxPrimitives.h>
 #include <sstream>
+
+using namespace std;
 
 namespace GMUCS425
 {
@@ -55,11 +58,11 @@ namespace GMUCS425
             //create a chicken and send the chicken there
             MyChickenAgent * chicken = new MyChickenAgent(battery,charging_time, pcover);
             assert(chicken);
-            MySprite * sprite=getMyGame()->getSpriteManager()->get("k");
+            MySprite * sprite=getMyGame()->getSpriteManager()->get(this->chicken_id);
             assert(sprite);
             chicken->setSprite(sprite);
             chicken->tranlateTo(x,y);
-            chicken->scaleTo(0.1);
+            chicken->scaleTo(this->chicken_scale);
             getMyGame()->getSceneManager()->get_active_scene()->add_agent(chicken);
             this->chickens.push_back(chicken);
             ready_chicken=chicken;
@@ -135,18 +138,18 @@ namespace GMUCS425
               //create a chicken and send the chicken there
               MyChickenAgent * chicken = new MyChickenAgent(battery,charging_time,pcover);
               assert(chicken);
-              MySprite * sprite=getMyGame()->getSpriteManager()->get("k");
+              MySprite * sprite=getMyGame()->getSpriteManager()->get(this->chicken_id);
               assert(sprite);
               chicken->setSprite(sprite);
               chicken->tranlateTo(x,y);
-              chicken->scaleTo(0.1);
+              chicken->scaleTo(this->chicken_scale);
               getMyGame()->getSceneManager()->get_active_scene()->add_agent(chicken);
               this->chickens.push_back(chicken);
             }//end for i
             //break;
           }//end for schedule
 
-          cout<<"- Created "<<this->chickens.size()<<" chickens"<<endl;
+          cout<<"- Created "<<this->chickens.size()<<" UAVs"<<endl;
 
           //assign schedule to chickens
           auto cit=chickens.begin();
@@ -322,28 +325,27 @@ namespace GMUCS425
 
     //draw path in schedules
     typedef mathtool::Point3d Point3d;
-    Point3d colors[10]={Point3d(0, 0, 12),Point3d(0, 130, 200),Point3d(245, 130, 48),
-                        Point3d(145, 30, 180),Point3d(240, 50, 230),Point3d(210, 245, 60),
-                        Point3d(250, 190, 190),
-                        Point3d(0, 128, 128),Point3d(170, 110, 40),Point3d(255, 225, 25)};
-
+    // Point3d colors[10]={Point3d(0, 0, 12),Point3d(0, 130, 200),Point3d(245, 130, 48),
+    //                     Point3d(145, 30, 180),Point3d(240, 50, 230),Point3d(210, 245, 60),
+    //                     Point3d(250, 190, 190),
+    //                     Point3d(0, 128, 128),Point3d(170, 110, 40),Point3d(255, 225, 25)};
+    //Point3d colors[15]={Point3d(200,11,126), Point3d(228,142,88), Point3d(90,160,141), Point3d(226,143,173), Point3d(76,146,177), Point3d(168,200,121), Point3d(103,143,174), Point3d(240,199,171), Point3d(172,153,193), Point3d(150,177,208), Point3d(239,180,193), Point3d(192,136,99), Point3d(173,167,89), Point3d(237,170,125), Point3d(200,194,189)};
+    Point3d colors[20]={Point3d(200,134,145), Point3d(173,133,186), Point3d(140,161,195), Point3d(129,173,181), Point3d(178,200,145), Point3d(185,156,107), Point3d(220,153,105), Point3d(148,148,148), Point3d(116,161,142), Point3d(201,194,127), Point3d(145,134,126), Point3d(178,170,164), Point3d(217,213,210), Point3d(178,178,178), Point3d(214,214,214), Point3d(193,179,142), Point3d(249,205,151), Point3d(189,182,176), Point3d(183,166,173), Point3d(178,226,137)};
     int k=0;
 
     for(auto& schdule : schdules)
     {
-      SDL_SetRenderDrawColor(renderer,colors[k][0],colors[k][1],colors[k][2],0);
-
-      k=(k+1)%10;
+      //SDL_SetRenderDrawColor(renderer,colors[k][0],colors[k][1],colors[k][2],0);
       //auto & waypt=schdule.front();
       //SDL_RenderDrawLine(renderer, x, y, waypt[0], waypt[1]);
       for(auto i = schdule.begin();i!=schdule.end();i++)
       {
         auto j=i; j++;
         if(j==schdule.end()) continue;
-        SDL_RenderDrawLine(renderer, (*i)[0], (*i)[1], (*j)[0], (*j)[1]);
-//        thickLineRGBA (renderer, (*i)[0], (*i)[1], (*j)[0], (*j)[1], 6, colors[k][0],colors[k][1],colors[k][2],0);
+        //SDL_RenderDrawLine(renderer, (*i)[0], (*i)[1], (*j)[0], (*j)[1]);
+        thickLineRGBA (renderer, (*i)[0], (*i)[1], (*j)[0], (*j)[1], 6, colors[k][0],colors[k][1],colors[k][2],255);
       }//end i
-
+      k=(k+1)%20;
       //break;
     }//end for schdule
 

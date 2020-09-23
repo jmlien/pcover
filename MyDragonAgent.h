@@ -29,6 +29,9 @@ namespace GMUCS425
         this->pcover_grid_width=width;
         this->pcover_grid_height=height;
         this->pcover_opt_method=method;
+
+        chicken_id="k";
+        chicken_scale=1.0;
       }
 
       virtual void handle_event(SDL_Event & e);
@@ -41,6 +44,12 @@ namespace GMUCS425
 
       //determine path and return path length
       float pathing(const Point2d& s, const Point2d& g, list<Point2d>& path);
+
+      //
+      void setChickenInfo(std::string id, float scale){ 
+        this->chicken_id=id;
+        this->chicken_scale=scale;
+      }
 
     private:
 
@@ -73,8 +82,10 @@ namespace GMUCS425
       bool left;
       MyAgent * collide_with;
 
-      //
+      //chickens are created this dragon agents!
       list<MyChickenAgent *> chickens;
+      std::string chicken_id;
+      float chicken_scale;
     };
 
 }//end namespace

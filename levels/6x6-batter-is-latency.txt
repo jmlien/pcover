@@ -1,7 +1,7 @@
 40 40
 seed 10
-perlin 3 3 cubic 1 0.1 blend imgs/rock.jpeg imgs/water.jpeg
-method shortest_lp
+perlin 3 3 cubic 1 0.1 blend imgs/grass.png imgs/rock.jpeg 
+method tsp_lp
 regions 6 6
 battery  5000
 charging 11000
@@ -14,7 +14,7 @@ w imgs/brick.png 0.0 0.2
 
 Characters
 z imgs/zombie.png 0.05
-k imgs/chicken.png  0.1
+k imgs/drone4.png  0.1
 d imgs/dragon.png 0.08
 
 
