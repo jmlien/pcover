@@ -156,6 +156,8 @@ bool MyPCoverPlanner::schedule( const Point2d& start )
       schedule_dijkstra_lp();
   else if(m_opt_method=="hybrid")
       schedule_hybrid(5);
+  else if(m_opt_method=="rolling")
+      schedule_rolling();
   else{
     cerr<<"! Error: Unknown pcover optimization method: "<<m_opt_method<<endl;
     exit(1);
@@ -166,6 +168,8 @@ bool MyPCoverPlanner::schedule( const Point2d& start )
   return true;
 }
 
+//shortest path LP uses the shortest path to every node
+//as the tour
 void MyPCoverPlanner::schedule_shorest_paths_lp()
 {
   vector<MySchedule> schedules;
@@ -175,7 +179,7 @@ void MyPCoverPlanner::schedule_shorest_paths_lp()
     {
       Node & n=m_grid[i][j];
       if(!n.free) continue; //this node is in collision, no neighbors
-      //cout<<"n id="<<n.id<<" time to station="<<n.time2station<<endl;
+
       MySchedule schedule;
       const auto & path=n.path2station;
       schedule.insert(schedule.end(), path.begin(), path.end() );
@@ -297,7 +301,7 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp2(int trials)
     }//end for tour
   }
 
-#if 00
+#if 00 //on/off timed schedule
   //
   vector<MyTimedSchedule> tschedules;
   for(auto& schedule : schedules) schedule2timedschedules(schedule,tschedules);
@@ -337,7 +341,6 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp2(int trials)
 
   return true;
 }//end MyPCoverPlanner
-
 
 void MyPCoverPlanner::schedule_tsp_segments_greedy(int trials)
 {
@@ -470,14 +473,13 @@ void MyPCoverPlanner::schedule_lollipop_lp()
   cout<<"- Best schedule needs "<<total_chickens_needed<<" UAVs and "<<m_schedules.size()<<" tours"<<endl;
 }
 
-
-
 bool MyPCoverPlanner::schedule_hybrid(int trials)
 {
-  //
+  vector<MySchedule> schedules;
+
+  /*
   vector<TSP> tours;
   tsp(m_charging_station,tours,trials);
-  vector<MySchedule> schedules;
 
   for(int i=0;i<tours.size();i++)
   {
@@ -524,6 +526,9 @@ bool MyPCoverPlanner::schedule_hybrid(int trials)
     if(m_num_valid_cells==nodes_covered.size())
      break; //done
   }//for data
+  */
+
+  collect_schedules(schedules, trials, true);
 
   int total_chickens_needed=SolveLP(schedules,m_schedules);
 
@@ -607,7 +612,197 @@ void MyPCoverPlanner::schedule_lollipop_lp2()
   exit(1);
 }
 
+//rolling based scheduling
+bool MyPCoverPlanner::schedule_rolling()
+{
+  //create n flexible timed schedules
+  vector<MyTimedSchedule> confirmed_ts;
+  vector<MyTimedSchedule> all_ts;
+  unordered_map< Node*, unordered_set<MyTimedSchedule*> > N2S; //node to schedules
+  unordered_map< Node*, MyInterval > last_visits; //last visited time interval
+
+  {
+    //get schedules for the first rounds
+    vector<MySchedule> all_schedules;
+    collect_schedules(all_schedules, 10, true);
+
+    //find optimal init schedule
+    vector<MySchedule> init_scheudles;
+    SolveLP(all_schedules,init_scheudles);
+
+    //convert initial schedules to timed schedules
+    for(auto& schedule : init_scheudles){
+      schedule.chicken_needed=1; //create 1 timed tour
+      schedule2timedschedules(schedule,confirmed_ts);
+    }
+
+    //record schedules from nodes' perspective
+    for(auto& s : all_schedules){
+      s.chicken_needed=1; //create 1 timed tour
+      schedule2timedschedules(s,all_ts);
+      MyTimedSchedule& ts=all_ts.back();
+      list<Node *> nodes = visitedNodes(ts); //collect all nodes passed through
+      for(Node * n : nodes) N2S[n].insert(&ts);
+    }
+  }
+
+  //assign comfirmed schedule to nodes
+  for(auto & ts : confirmed_ts)
+  {
+    for(auto& data : ts.getTT()) //(node,time)
+    {
+      //the time that this schedule arrived at this node
+      //departure time + travel time (atime)
+      double at=data.second+ts.start_time;
+      Node *node=data.first;
+      node->timed_schedules.push_back({at,&ts});
+    }
+  }//end of for(ts)
+
+  list< pair<float, Node*> > nodes_with_problem; //witness and node
+  for(int i=0;i<m_height;i++){
+    for(int j=0;j<m_width;j++){
+      Node & n=m_grid[i][j];
+      if(!n.free) continue; //this node is in collision, no neighbors
+      if(&n==this->m_charging_station) continue;
+      sort(n.timed_schedules.begin(), n.timed_schedules.end());
+      double witness;
+      if(is_pcovered(&n, witness)) continue;
+      nodes_with_problem.push_back({witness,&n});
+    }
+  }
+
+  //get schedules for the rest of runs
+  bool pcovered=false; //does the map is p-covered
+  while(!nodes_with_problem.empty()){ //proposing new schedules while the graph is not pcovered
+
+    vector<MyTimedSchedule> proposed_ts;
+
+    for(auto& node : nodes_with_problem){
+
+        // check if the proposed schedule of n may cover n
+        Node * n = node.second;
+        double max_w =node.first;  //previous witness
+        for(MyTimedSchedule& ts : proposed_ts){
+          double witness;
+          if(is_pcovered(n, &ts, witness)) continue;
+          if(witness>max_w) max_w=witness;
+        }
+
+        //no proposed schedule that can improve the latency violation
+        //propose new schedules with the needed start time
+        if(max_w == node.first){
+          unordered_set<MyTimedSchedule*> & schedules = N2S[n];
+          for(MyTimedSchedule* ts:schedules){
+            //create timed schedule that pushes max_w as far as possible
+            double travel_time=ts->getTT().at(n);
+            MyTimedSchedule newts(*ts);
+            newts.start_time=max_w-travel_time; //need to arrive at max_w
+            proposed_ts.push_back(newts);
+          }
+        }
+
+    }//end n
+
+    //find the minimum set of proposed schedule
+    vector<MyTimedSchedule> new_confirmed_ts;
+    {
+      list<Node *> nodes;
+      for(auto& data: nodes_with_problem) nodes.push_back(data.second);
+      SolveLP(nodes, proposed_ts, new_confirmed_ts);
+    }
+
+    //add solution to comfirmed schedule
+    for(MyTimedSchedule& ts : new_confirmed_ts){
+      for(auto& data : ts.getTT())
+      {
+        //the time that this schedule arrived at this node
+        //departure time + travel time (atime)
+        double at=data.second+ts.start_time;
+        Node *node=data.first;
+        node->timed_schedules.push_back({at,&ts});
+      }
+    }
+
+    //check if the nodes are pcovered now
+    list< pair<float, Node*> > nodes_still_with_problem;
+    for(auto& data : nodes_with_problem){
+      double witness;
+      Node * n =data.second;
+      if(is_pcovered(n, witness)) continue;
+      nodes_still_with_problem.push_back({witness,n});
+    }
+
+    nodes_with_problem.swap(nodes_still_with_problem);
+  }
+
+  return true;
+}//end MyPCoverPlanner
+
+
+void MyPCoverPlanner::collect_schedules
+(vector<MySchedule>& schedules, int tsp_trials, bool do_lollipop)
+{
+  vector<TSP> tours;
+  tsp(m_charging_station,tours,tsp_trials);
+
+  for(int i=0;i<tours.size();i++)
+  {
+    TSP& tour=tours[i];
+    //break TSP into segments
+    for(auto it=tour.begin(); it!=tour.end(); it++)
+    {
+        build_valid_schedule_from_tsp(tour, it, schedules);
+    }//end for tour
+  }
+
+  if(!do_lollipop) return; //done
+
+  //now add tour from lollipop
+  vector< pair<float, Node*> > sorted_nodes;
+  for(int i=0;i<m_height;i++)
+  {
+    for(int j=0;j<m_width;j++)
+    {
+      Node & n=m_grid[i][j];
+      if(!n.free) continue; //this node is in collision, no neighbors
+      if(&n==this->m_charging_station) continue;
+      sorted_nodes.push_back(make_pair(-n.dist2station, &n));
+    }//end j
+  }//end i
+
+  sort(sorted_nodes.begin(),sorted_nodes.end());
+  set<Node *> nodes_covered;
+
+  for(auto& data : sorted_nodes)
+  {
+    Node & n=*(data.second);
+    cout<<"working on node "<<n.id<<" distance="<<n.dist2station<<endl;
+    vector<Lollipop> lollipops=build_lollipops(&n,0);
+    for(Lollipop & lollipop : lollipops)
+    {
+      MySchedule schedule=lollipop2schedule(lollipop);
+      schedules.push_back(schedule);
+      lollipop.destroy();
+      nodes_covered.insert(schedule.nodes.begin(),schedule.nodes.end());
+    }//for each lollipop
+
+    cout<<"- covered "<<nodes_covered.size()<<"/"<<m_num_valid_cells<<" cells,"
+        <<" schedule size="<<schedules.size()<<endl;
+
+    if(m_num_valid_cells==nodes_covered.size())
+     break; //done
+  }//for data
+
+  return; //done with collecting schedules
+}
+
+// ----------------------------------------------------------------------------
 //
+// lollipop helpers
+//
+// ----------------------------------------------------------------------------
+
 // build many lollipop tours for a given node n
 //
 vector<MyPCoverPlanner::Lollipop>
@@ -664,7 +859,6 @@ MyPCoverPlanner::build_lollipops
   lollipops=vector<Lollipop>(closed.begin(), closed.end());
   return lollipops;
 }
-
 
 //
 // build many lollipop tours for a given node n
@@ -748,55 +942,6 @@ MyPCoverPlanner::build_lollipop
   return lollipop;
 }
 
-void
-MyPCoverPlanner::schedule2timedschedules
-(MyPCoverPlanner::MySchedule & base, vector<MyPCoverPlanner::MyTimedSchedule>& Tschedules)
-{
-    //vector<MyTimedSchedule> result;
-    MyTimedSchedule schedule(base);
-
-    int chicken_needed=schedule.chicken_needed;
-    schedule.chicken_needed=1;
-    double cur_time=drand48()*0.01;
-    schedule.start_time=cur_time;
-
-    cout<<"schedule.start_time="<<schedule.start_time<<endl;
-    Node * pre=NULL;
-
-    //create the first timed schedule
-    list<Node *> no_repeats;
-    for(Node * n : schedule.nodes)
-    {
-      if(pre==n) continue;
-      if(pre!=NULL){
-        float w=getWeight_no_exit(pre, n);
-        if(w==-FLT_MAX){
-          w=dist2time( (pre->pos-n->pos).norm() );
-        }
-        cur_time+=w;
-      }
-      no_repeats.push_back(n);
-      schedule.arrival_times.push_back(cur_time);
-      pre=n;
-    }
-    schedule.nodes.swap(no_repeats);
-    Tschedules.push_back(schedule);
-
-    //create the rest of timed schedules offset by the latency
-    for(int i=1;i<=chicken_needed;i++)
-    {
-      schedule.start_time+=m_latency;
-      list<double> arrival_times;
-      for(double t : schedule.arrival_times)
-          arrival_times.push_back(t+m_latency);
-      schedule.arrival_times.swap(arrival_times);
-      Tschedules.push_back(schedule);
-    }
-    //done
-}
-
-
-
 MyPCoverPlanner::MySchedule
 MyPCoverPlanner::lollipop2schedule(MyPCoverPlanner::Lollipop & lollipop)
 {
@@ -878,135 +1023,6 @@ MyPCoverPlanner::Lollipop MyPCoverPlanner::init_lollipop
   lollipop.time_needed=total_cost;
 
   return lollipop;
-}
-
-
-
-//build pcover for the given node
-void MyPCoverPlanner::build_pcovers_from_timed_schedules
-(MyPCoverPlanner::Node * n)
-{
-  cout<<"start to sort "<<n->timed_schedules.size()<<" timed schedules"<<endl;
-
-  //sort by arrival time (not sure why this is so slow....)
-  sort(n->timed_schedules.begin(),n->timed_schedules.end());
-  typedef vector< pair<double,MyTimedSchedule*> >::iterator IT;
-  typedef list<IT> IT_LIST;
-
-  // cout<<"after sorting: ";
-  // std::cout.precision(15);
-  // int count=0;
-  // for(auto& tmp : n->timed_schedules){
-  //   cout<<"("<<tmp.first<<","<<tmp.second<<");";
-  //   if(count++>10) break;
-  // }
-  // cout<<endl;
-
-  cout<<"n "<<n->id<<" has "<<n->timed_schedules.size()<<" timed schedules and ";
-
-  // cout<<"TS:";
-  // for(auto it=n->timed_schedules.begin();it!=n->timed_schedules.end();it++)
-  //   cout<<"("<<it->first<<", "<<it->second<<"); ";
-  // cout<<endl;
-
-  //go through each tour in the acsending order
-  for(auto it=n->timed_schedules.begin();it!=n->timed_schedules.end();it++)
-  {
-    if(it->first>m_latency) break; //tour arriving the node too late
-    IT_LIST valid_pcover;
-
-    //add the tour as the first to arrive
-    valid_pcover.push_back(it);
-    if(! valid_node_pcover(valid_pcover) )
-    {
-      //find the next one that is as far as possible but less than latency
-      auto last_valid=n->timed_schedules.end();
-      auto next=it; next++;
-      for(;next!=n->timed_schedules.end();next++)
-      {
-        auto last=valid_pcover.back();
-        if(next->first-last->first<=m_latency)
-        {
-          last_valid=next;
-          //if(next->first-last->first==m_latency)
-          //  cout<<"HAHA "<<next->first<<"; "<<next->second<<endl;
-        }
-        //this tour is too late, but if there is a last_valid tour
-        //remember it and then try again.
-        else if(last_valid!=n->timed_schedules.end()){
-          valid_pcover.push_back(last_valid);
-          last_valid=n->timed_schedules.end();
-          if(valid_node_pcover(valid_pcover)) break;
-          else next--; //try again;
-        }
-      }//end for next
-
-      //if last_valid is indeed valid, remember it
-      if(last_valid!=n->timed_schedules.end())
-      {
-        valid_pcover.push_back(last_valid);
-      }
-    }//end if(! valid_node_pcover(valid_pcover) )
-
-    //check if valid_pcover is indeed valid
-    //cout<<"check if valid_pcover is indeed valid; valid_pcover size="<<valid_pcover.size()<<endl;
-    if(valid_node_pcover(valid_pcover))
-    {
-      //cout<<"!valid!"<<endl;
-      set<MyTimedSchedule*> tmp;
-      for(auto entry : valid_pcover) tmp.insert(entry->second);
-      Node::PCover pcover(tmp.begin(),tmp.end());
-
-      //???? is the MyTimedSchedule* sorted? as set_diff requires sorted values
-      sort(pcover.begin(), pcover.end());
-/*
-      if(pcover.size()==2 && pcover.front()==pcover.back())
-      {
-        cout<<"Haaaa n="<<n->id<<" ts size="<<n->timed_schedules.size()<<endl;
-        for(auto ts : pcover)
-          cout<<ts<<endl;
-        cout<<"~~~~~~"<<endl;
-        for(auto ts : n->timed_schedules)
-          cout<<ts.first<<","<<ts.second<<endl;
-        exit(1);
-      }
-  */
-
-
-      ///check is pcover dominates an earlier pcover
-      ///a pcover A dominates a second pcover B if A is a subset of B
-      ///ie. A can pcover the node with just a subset of B
-      bool dominated=false;;
-      for(Node::PCover & o : n->valid_pcovers)
-      {
-          Node::PCover diff;
-          set_difference(o.begin(),o.end(), pcover.begin(), pcover.end(), std::inserter(diff, diff.begin()));
-          if(diff.empty()){ dominated=true; break; } //o is subset of pcover
-      }
-
-      //pcover is ignored if pcover is dominated.
-      if(!dominated) //pcover is NOT domindate
-      {
-        //remove those dominiated by pcover
-        list<Node::PCover> tmp;
-        for(Node::PCover & o : n->valid_pcovers)
-        {
-            if(o.size()<pcover.size()){ tmp.push_back(o); continue; } //pcover cannot dominate o if o has fewer schedules
-            Node::PCover diff;
-            set_difference(pcover.begin(), pcover.end(), o.begin(),o.end(), std::inserter(diff, diff.begin()));
-            if(!diff.empty()){ tmp.push_back(o); }
-        }
-        tmp.push_back(pcover);
-        n->valid_pcovers.swap(tmp);
-      }
-
-    }//end if
-
-  }//end for auto it
-
-
-  cout<<n->valid_pcovers.size()<<" pcovers"<<endl;
-  //exit(1);
 }
 
 bool MyPCoverPlanner::expand_lollipop
@@ -1442,6 +1458,8 @@ bool MyPCoverPlanner::optimize_lollipop_simple2
   return orig_time_needed>min_time_needed;
 }
 
+//build a schedule from a tour and its starting node
+//return the iterator of tour that cannot fit into this current schedule
 MyPCoverPlanner::TSP::const_iterator
 MyPCoverPlanner::build_valid_schedule_from_tsp
 (const MyPCoverPlanner::TSP& tour,
@@ -1449,6 +1467,8 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
  MySchedule& schedule)
 {
     auto it=start; //the start of the schedule
+    const int buffer=11;
+
     //first station must be charging station
     if(it->first!=m_charging_station)
     {
@@ -1467,10 +1487,12 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
     {
       //schedule.nodes.insert(it->first);
       schedule.nodes.push_back(it->first);
+      //new arriva time = current tour duration - return_time + time to next node
       float new_arrival=schedule.duration-it->first->time2station+it->second;
+      //new duration  = arrival time + return time
       float new_duration=new_arrival+next->first->time2station;
       if(new_arrival>m_latency) break; //arrived after latency
-      if(new_duration>this->m_battery+11) break; //out of battery
+      if(new_duration>this->m_battery+buffer) break; //out of battery
       //if(new_duration+m_charging>m_latency) break; //
       //cout<<"it->first->pos="<<it->first->pos<<endl;
       schedule.push_back(next->first->pos);
@@ -1489,13 +1511,16 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
     return it;
 }
 
-
+//build a schedule from a single tour and its start
+//add the schedule to "schedules"
+//this method should probably combined with the other method.....
 void
 MyPCoverPlanner::build_valid_schedule_from_tsp
 (const MyPCoverPlanner::TSP& tour,
  MyPCoverPlanner::TSP::const_iterator start,
  vector<MySchedule>& schedules)
 {
+    const int buffer=11;
     auto it=start; //the start of the schedule
     MySchedule schedule;
     float arrival=it->first->time2station; //arrival time
@@ -1531,7 +1556,7 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
       float new_arrival=arrival+it->second;
       float new_duration=new_arrival+next->first->time2station;
       if(new_arrival>m_latency) break; //arrived after latency
-      if(new_duration>this->m_battery+11) break; //out of battery
+      if(new_duration>this->m_battery+buffer) break; //out of battery
       //if(new_duration+m_charging>m_latency) break; //
 
       int new_chicken_needed=(int)ceil((schedule.duration+m_charging)*1.0f/m_latency);
@@ -1779,8 +1804,58 @@ void MyPCoverPlanner::generate_constraints( const vector<MySchedule>& schedules,
     lpc.lower_bound=1;
     constraints.push_back(lpc);
   }
-
 }
+
+
+
+//check if proposed_ts to conver all nodes in "nodes"
+int MyPCoverPlanner::SolveLP
+(list<Node *>& nodes, const vector<MyTimedSchedule>& proposed_ts, vector<MyTimedSchedule>& opt_ts)
+{
+  /*
+  //build constraints
+  list<LP_constraints> constraints;
+  vector<float> solution; //0/1
+  int total_chickens_needed=0;
+  generate_constraints(schedules, constraints);
+
+  if(this->m_num_valid_cells<=0)
+  {
+    cerr<<"! Error: Number of valid cells="
+        <<this->m_num_valid_cells<<endl;
+    exit(1);
+  }
+
+  if(m_num_valid_cells!=constraints.size())
+  {
+    cerr<<"! Error: LP constraint size inconsistent;"
+        <<" expect "<<m_num_valid_cells<<", get "<<constraints.size()<<endl;
+    exit(1);
+  }
+
+  //cout<<"constraints size="<<constraints.size()<<endl;
+  //cout<<"schedules size="<<schedules.size()<<endl;
+  if( SolveLP(schedules, constraints, solution) )
+  {
+    int size=solution.size();
+    for(int i=0;i<size;i++){
+      if(solution[i]!=0){
+        opt.push_back(schedules[i]);
+        total_chickens_needed+=schedules[i].chicken_needed;
+      }
+    }//end for i
+  }
+  else  //failed...no LP solved
+    return -1;
+
+  // cout<<"- Best schedule needs "<<total_chickens_needed
+  //     <<" chickens and "<<m_schedules.size()<<" tours"<<endl;
+
+  return total_chickens_needed;
+  */
+  return 0;
+}
+
 
 bool MyPCoverPlanner::SolveLP(
   vector<MySchedule>& schdules,
@@ -1907,215 +1982,6 @@ bool MyPCoverPlanner::SolveLP(
 	return solution_found;
 }
 
-
-//find the optimal subset of timed schdules from node pcovers
-int MyPCoverPlanner::SolveLP(vector<MyTimedSchedule>& opt)
-{
-  //build a list of Node::PCover for each node
-  unordered_map<MyTimedSchedule *, int> timed_schedules;  //variables #1
-  map<Node::PCover, int> node_pcovers;  //variables #2
-  list<Node *> nodes;
-
-  for(int i=0;i<m_height;i++)
-  {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
-      if(!n.free) continue; //this node is in collision, no neighbors
-      build_pcovers_from_timed_schedules(&n);
-      nodes.push_back(&n);
-      for(auto& pc: n.valid_pcovers)
-      {
-        //cout<<"\tpc size="<<pc.size()<<";";
-        node_pcovers.insert(make_pair(pc, 0));
-        //collect all timed_schedules
-        for(auto & s : pc){
-          timed_schedules.insert(make_pair(s,0));
-          //cout<<s<<";";
-        }
-        //cout<<endl;
-      }
-    }//end for j
-  }//end for i
-  int ts_size = timed_schedules.size();
-  int schedule_id=0;
-  for(auto & ts : timed_schedules) ts.second=schedule_id++;
-
-  int pcover_id=ts_size;
-  for(auto & pc : node_pcovers) pc.second=pcover_id++;
-
-  //the goal is to select a subset of timed_schedules
-  list<LP_constraints> constraints;
-  vector<float> solution; //0/1
-  int total_chickens_needed=0;
-  //create constraints, type 1
-  //make sure that every nodeis covered at least once
-  for(Node * n : nodes)
-  {
-    LP_constraints lpc;
-    for(auto& pc: n->valid_pcovers)
-    {
-      lpc.vids.push_back(node_pcovers[pc]);
-    }
-    lpc.type=GLP_LO;
-    lpc.lower_bound=1;
-    constraints.push_back(lpc);
-  }//end n
-
-  //create constraints, type 2
-  //make sure that a node-pcover is selected only when its timed
-  //schedules are all selected
-  for(auto & i : node_pcovers)
-  {
-    LP_constraints lpc;
-    const Node::PCover & pc=i.first;
-    int pc_id=i.second;
-    for(MyTimedSchedule * ts: pc){
-      lpc.vids.push_back(timed_schedules[ts]);
-      lpc.coeffs.push_back(1);
-    }//end ts
-    lpc.vids.push_back(pc_id);
-    lpc.coeffs.push_back(-((int)pc.size()));
-    lpc.type=GLP_LO;
-    lpc.lower_bound=0;
-    constraints.push_back(lpc);
-  }//end i
-
-  //now setup LP....
-  int constraint_size = constraints.size();
-	int variable_size = timed_schedules.size() + node_pcovers.size();
-
-
-  cout<<"constraint_size="<<constraint_size<<" variable_size="<<variable_size<<endl;
-
-  //glp_term_out(GLP_OFF);
-
-	glp_prob * lp = glp_create_prob();
-	assert(lp);
-	glp_set_prob_name(lp, "lp");
-	glp_set_obj_dir(lp, GLP_MIN);
-	glp_add_rows(lp, constraint_size);
-	glp_add_cols(lp, variable_size);
-
-	//init rows (constraints)
-	int iaja_size = 0;
-	int row_id = 1;
-
-	char tmp[64];
-	for (auto & c : constraints)
-	{
-		sprintf(tmp, "r%08d", row_id);
-		glp_set_row_name(lp, row_id, tmp);
-		glp_set_row_bnds(lp, row_id, c.type, c.lower_bound, c.upper_bound);
-		iaja_size += c.vids.size();
-		row_id++;
-	}
-
-	//init cols (varibles)
-  //first set: timed_schedules
-	for (int i = 1; i <= variable_size; i++)
-	{
-		char tmp[64];
-		sprintf(tmp, "s%08d", i);
-		glp_set_col_name(lp, i, tmp);
-		//MIP
-		glp_set_col_kind(lp, i, GLP_BV);
-		//MIP
-		glp_set_obj_coef(lp, i, (i<=ts_size)?1:0 );
-	}//end i
-
-	//init ia, ja, and ar
-	int * ia = new int[1 + iaja_size];
-	int * ja = new int[1 + iaja_size];
-	double * ar = new double[1 + iaja_size];
-	assert(ia && ja && ar);
-
-	int ia_id = 1;
-	row_id = 1;
-	for (auto & c : constraints)
-	{
-    auto coeffs_it = c.coeffs.begin();
-    //check if we have sufficient number of coefficients
-    if(c.coeffs.empty()==false)
-      assert(c.coeffs.size()==c.vids.size());
-    //now create constraints
-		for (auto vid : c.vids)
-		{
-			ia[ia_id] = row_id;
-			ja[ia_id] = vid + 1;
-      if(c.coeffs.empty()) ar[ia_id] = 1;
-      else{
-        ar[ia_id] = *coeffs_it;
-        coeffs_it++;
-      }
-      //cout<<"ia["<<ia_id<<"]="<<ia[ia_id]<<" ja["<<ia_id<<"]="<<ja[ia_id]<<" ar["<<ia_id<<"]="<<ar[ia_id]<<endl;
-			ia_id++;
-		}//end for j
-
-		row_id++;
-	}//end for i
-
-
-	glp_load_matrix(lp, iaja_size, ia, ja, ar);
-
-	//assert(glp_simplex(lp, NULL) == 0);
-	//assert(glp_get_status(lp) == GLP_OPT);
-
-	glp_iocp parm;
-	glp_init_iocp(&parm);
-	parm.pp_tech = GLP_PP_ALL;
-	parm.presolve = GLP_ON;
-	parm.clq_cuts = GLP_ON;
-	parm.binarize = GLP_ON;
-	//parm.cb_func = callback;
-	parm.cb_info = this;
-
-	parm.tm_lim = 18000000; //1800 sec
-	int err = glp_intopt(lp, &parm);
-	//cout << "err=" << err << endl;
-
-	double z = glp_mip_obj_val(lp);
-	//cout << "objective value=" << z << endl;
-
-
-	//get mip status
-	int glp_prim_stat = glp_mip_status(lp);
-
-	switch (glp_prim_stat)
-	{
-  	case GLP_OPT: cout << "solution is optimal;" << endl; break;
-  	case GLP_FEAS: cout << "solution is feasible;" << endl; break;
-  	case GLP_INFEAS: cout << "solution is infeasible;" << endl; break;
-  	case GLP_NOFEAS: cout << "problem has no feasible solution;" << endl; break;
-  	case GLP_UNBND: cout << "problem has unbounded solution;" << endl; break;
-  	case GLP_UNDEF: cout << "solution is undefined." << endl; break;
-	}
-
-	bool solution_found = glp_prim_stat == GLP_OPT || glp_prim_stat == GLP_FEAS;
-
-	if (solution_found)
-	{
-    vector<MyTimedSchedule*> timed_schedules_vector; //linearized version of timed_schedules
-    timed_schedules_vector.resize(ts_size);
-    for(auto& ts : timed_schedules)
-      timed_schedules_vector[ts.second]=ts.first;
-
-		for (int i = 1; i <= ts_size; i++)
-		{
-			double x = glp_mip_col_val(lp, i);
-      if(x!=0)
-			   opt.push_back(*timed_schedules_vector[i-1]);
-		}
-	}
-
-	glp_delete_prob(lp);
-	delete[] ia;
-	delete[] ja;
-	delete[] ar;
-
-	return opt.size();
-}
-
 int MyPCoverPlanner::SolveLP(vector<MySchedule>& schedules, vector<MySchedule>& opt)
 {
     //build constraints
@@ -2213,7 +2079,7 @@ void MyPCoverPlanner::get_desendents(Node * n, vector<Node*> & decendents)
   }
 }
 
-//compute path from each node to the charging station
+//compute path from the charging station to each node in the graph
 bool MyPCoverPlanner::paths2station()
 {
   //brute force.... this can be done much more efficient
@@ -2352,6 +2218,7 @@ MyPCoverPlanner::Node * MyPCoverPlanner::getNode(float x, float y)
   return &m_grid[(int)(y/cell_h)][(int)(x/cell_w)];
 }
 
+//collect nodes along the path that can be visited before the deadline
 list<MyPCoverPlanner::Node *>
 MyPCoverPlanner::visitedNodes(const list<Point2d>& path, float arrival_time)
 {
@@ -2372,11 +2239,478 @@ MyPCoverPlanner::visitedNodes(const list<Point2d>& path, float arrival_time)
   return nodes;
 }
 
+//this version gets all visited nodes along the path regardless the latency constraint
+inline list<MyPCoverPlanner::Node *>
+MyPCoverPlanner::visitedNodes(const list<Point2d>& path)
+{
+  return visitedNodes(path, -FLT_MAX);
+}
+
+//
+//
+// Methods related timed schedule
+//
+//
+
+//check if a node is pcoverd by the timed schedule (ts) with the schedules in
+//n->timed_schedules
+bool MyPCoverPlanner::is_pcovered
+(MyPCoverPlanner::Node * n, MyPCoverPlanner::MyTimedSchedule * ts, double& witness)
+{
+  //this can be slow....
+
+  vector< pair<double, MySchedule*> > timed_schedules=n->timed_schedules;
+  {
+    const unordered_map<Node *, double> & tt=ts->getTT();
+    auto at=tt.at(n)+ts->start_time; //arrival time at node n on this schedule
+    timed_schedules.push_back({at,ts});
+  }
+
+  //
+  sort(timed_schedules.begin(),timed_schedules.end());
+
+  //
+  return is_pcovered(n,timed_schedules,witness);
+}
+
+//check if a node is pcoverd by the timed schedules in n->timed_schedules
+//assume n->timed_schedules is sorted by arrival time
+bool MyPCoverPlanner::is_pcovered(MyPCoverPlanner::Node * n, double& witness)
+{
+  return is_pcovered(n,n->timed_schedules, witness);
+}
+
+//check if a node is pcoverd by the provided timed schedules
+//assume timed_schedules is sorted by arrival time
+bool MyPCoverPlanner::is_pcovered
+(MyPCoverPlanner::Node * n,
+ vector< pair<double, MyPCoverPlanner::MySchedule*> >& timed_schedules,
+ double& witness)
+{
+  auto it=n->timed_schedules.begin();
+  auto next=it; next++;
+  for(;next!=n->timed_schedules.end();next++)
+  {
+    double delta=next->first-it->first;
+    if(delta>m_latency){
+      witness=it->first+m_latency; //the first time latency constraint is violated
+      return false;
+    }
+    it=next;
+  }
+
+  auto& ts1=timed_schedules.front();
+  auto& tsn=n->timed_schedules.back();
+  double delta=ts1.first + ts1.second->duration + m_charging - tsn.first;
+  if(delta>m_latency){
+    witness=m_latency+tsn.first; //the first time latency constraint is violated
+    return false;
+  }
+
+  return true;
+}
+
+//build pcover for the given node
+void MyPCoverPlanner::build_pcovers_from_timed_schedules
+(MyPCoverPlanner::Node * n)
+{
+  cout<<"start to sort "<<n->timed_schedules.size()<<" timed schedules"<<endl;
+
+  //sort by arrival time (not sure why this is so slow....)
+  sort(n->timed_schedules.begin(),n->timed_schedules.end());
+  typedef vector< pair<double,MySchedule*> >::iterator IT;
+  typedef list<IT> IT_LIST;
+
+  // cout<<"after sorting: ";
+  // std::cout.precision(15);
+  // int count=0;
+  // for(auto& tmp : n->timed_schedules){
+  //   cout<<"("<<tmp.first<<","<<tmp.second<<");";
+  //   if(count++>10) break;
+  // }
+  // cout<<endl;
+
+  cout<<"n "<<n->id<<" has "<<n->timed_schedules.size()<<" timed schedules and ";
+
+  // cout<<"TS:";
+  // for(auto it=n->timed_schedules.begin();it!=n->timed_schedules.end();it++)
+  //   cout<<"("<<it->first<<", "<<it->second<<"); ";
+  // cout<<endl;
+
+  //go through each tour in the acsending order
+  for(auto it=n->timed_schedules.begin();it!=n->timed_schedules.end();it++)
+  {
+    if(it->first>m_latency) break; //tour arriving the node too late
+    IT_LIST valid_pcover;
+
+    //add the tour as the first to arrive
+    valid_pcover.push_back(it);
+    if(! valid_node_pcover(valid_pcover) )
+    {
+      //find the next one that is as far as possible but less than latency
+      auto last_valid=n->timed_schedules.end();
+      auto next=it; next++;
+      for(;next!=n->timed_schedules.end();next++)
+      {
+        auto last=valid_pcover.back();
+        if(next->first-last->first<=m_latency)
+        {
+          last_valid=next;
+          //if(next->first-last->first==m_latency)
+          //  cout<<"HAHA "<<next->first<<"; "<<next->second<<endl;
+        }
+        //this tour is too late, but if there is a last_valid tour
+        //remember it and then try again.
+        else if(last_valid!=n->timed_schedules.end()){
+          valid_pcover.push_back(last_valid);
+          last_valid=n->timed_schedules.end();
+          if(valid_node_pcover(valid_pcover)) break;
+          else next--; //try again;
+        }
+      }//end for next
+
+      //if last_valid is indeed valid, remember it
+      if(last_valid!=n->timed_schedules.end())
+      {
+        valid_pcover.push_back(last_valid);
+      }
+    }//end if(! valid_node_pcover(valid_pcover) )
+
+    //check if valid_pcover is indeed valid
+    //cout<<"check if valid_pcover is indeed valid; valid_pcover size="<<valid_pcover.size()<<endl;
+    if(valid_node_pcover(valid_pcover))
+    {
+      //cout<<"!valid!"<<endl;
+      set<MySchedule*> tmp;
+      for(auto entry : valid_pcover) tmp.insert(entry->second);
+      Node::PCover pcover(tmp.begin(),tmp.end());
+
+      //???? is the MyTimedSchedule* sorted? as set_diff requires sorted values
+      sort(pcover.begin(), pcover.end());
+/*
+      if(pcover.size()==2 && pcover.front()==pcover.back())
+      {
+        cout<<"Haaaa n="<<n->id<<" ts size="<<n->timed_schedules.size()<<endl;
+        for(auto ts : pcover)
+          cout<<ts<<endl;
+        cout<<"~~~~~~"<<endl;
+        for(auto ts : n->timed_schedules)
+          cout<<ts.first<<","<<ts.second<<endl;
+        exit(1);
+      }
+  */
+
+
+      ///check is pcover dominates an earlier pcover
+      ///a pcover A dominates a second pcover B if A is a subset of B
+      ///ie. A can pcover the node with just a subset of B
+      bool dominated=false;;
+      for(Node::PCover & o : n->valid_pcovers)
+      {
+          Node::PCover diff;
+          set_difference(o.begin(),o.end(), pcover.begin(), pcover.end(), std::inserter(diff, diff.begin()));
+          if(diff.empty()){ dominated=true; break; } //o is subset of pcover
+      }
+
+      //pcover is ignored if pcover is dominated.
+      if(!dominated) //pcover is NOT domindate
+      {
+        //remove those dominiated by pcover
+        list<Node::PCover> tmp;
+        for(Node::PCover & o : n->valid_pcovers)
+        {
+            if(o.size()<pcover.size()){ tmp.push_back(o); continue; } //pcover cannot dominate o if o has fewer schedules
+            Node::PCover diff;
+            set_difference(pcover.begin(), pcover.end(), o.begin(),o.end(), std::inserter(diff, diff.begin()));
+            if(!diff.empty()){ tmp.push_back(o); }
+        }
+        tmp.push_back(pcover);
+        n->valid_pcovers.swap(tmp);
+      }
+
+    }//end if
+
+  }//end for auto it
+
+
+  cout<<n->valid_pcovers.size()<<" pcovers"<<endl;
+  //exit(1);
+}
+
+//find the optimal subset of timed schdules from node pcovers
+int MyPCoverPlanner::SolveLP(vector<MyTimedSchedule>& opt)
+{
+  //build a list of Node::PCover for each node
+  unordered_map<MySchedule *, int> timed_schedules;  //variables #1
+  map<Node::PCover, int> node_pcovers;  //variables #2
+  list<Node *> nodes;
+
+  for(int i=0;i<m_height;i++)
+  {
+    for(int j=0;j<m_width;j++)
+    {
+      Node & n=m_grid[i][j];
+      if(!n.free) continue; //this node is in collision, no neighbors
+      build_pcovers_from_timed_schedules(&n);
+      nodes.push_back(&n);
+      for(auto& pc: n.valid_pcovers)
+      {
+        //cout<<"\tpc size="<<pc.size()<<";";
+        node_pcovers.insert(make_pair(pc, 0));
+        //collect all timed_schedules
+        for(auto & s : pc){
+          timed_schedules.insert(make_pair(s,0));
+          //cout<<s<<";";
+        }
+        //cout<<endl;
+      }
+    }//end for j
+  }//end for i
+  int ts_size = timed_schedules.size();
+  int schedule_id=0;
+  for(auto & ts : timed_schedules) ts.second=schedule_id++;
+
+  int pcover_id=ts_size;
+  for(auto & pc : node_pcovers) pc.second=pcover_id++;
+
+  //the goal is to select a subset of timed_schedules
+  list<LP_constraints> constraints;
+  vector<float> solution; //0/1
+  int total_chickens_needed=0;
+  //create constraints, type 1
+  //make sure that every nodeis covered at least once
+  for(Node * n : nodes)
+  {
+    LP_constraints lpc;
+    for(auto& pc: n->valid_pcovers)
+    {
+      lpc.vids.push_back(node_pcovers[pc]);
+    }
+    lpc.type=GLP_LO;
+    lpc.lower_bound=1;
+    constraints.push_back(lpc);
+  }//end n
+
+  //create constraints, type 2
+  //make sure that a node-pcover is selected only when its timed
+  //schedules are all selected
+  for(auto & i : node_pcovers)
+  {
+    LP_constraints lpc;
+    const Node::PCover & pc=i.first;
+    int pc_id=i.second;
+    for(MySchedule * ts: pc){
+      lpc.vids.push_back(timed_schedules[ts]);
+      lpc.coeffs.push_back(1);
+    }//end ts
+    lpc.vids.push_back(pc_id);
+    lpc.coeffs.push_back(-((int)pc.size()));
+    lpc.type=GLP_LO;
+    lpc.lower_bound=0;
+    constraints.push_back(lpc);
+  }//end i
+
+  //now setup LP....
+  int constraint_size = constraints.size();
+	int variable_size = timed_schedules.size() + node_pcovers.size();
+
+
+  cout<<"constraint_size="<<constraint_size<<" variable_size="<<variable_size<<endl;
+
+  //glp_term_out(GLP_OFF);
+
+	glp_prob * lp = glp_create_prob();
+	assert(lp);
+	glp_set_prob_name(lp, "lp");
+	glp_set_obj_dir(lp, GLP_MIN);
+	glp_add_rows(lp, constraint_size);
+	glp_add_cols(lp, variable_size);
+
+	//init rows (constraints)
+	int iaja_size = 0;
+	int row_id = 1;
+
+	char tmp[64];
+	for (auto & c : constraints)
+	{
+		sprintf(tmp, "r%08d", row_id);
+		glp_set_row_name(lp, row_id, tmp);
+		glp_set_row_bnds(lp, row_id, c.type, c.lower_bound, c.upper_bound);
+		iaja_size += c.vids.size();
+		row_id++;
+	}
+
+	//init cols (varibles)
+  //first set: timed_schedules
+	for (int i = 1; i <= variable_size; i++)
+	{
+		char tmp[64];
+		sprintf(tmp, "s%08d", i);
+		glp_set_col_name(lp, i, tmp);
+		//MIP
+		glp_set_col_kind(lp, i, GLP_BV);
+		//MIP
+		glp_set_obj_coef(lp, i, (i<=ts_size)?1:0 );
+	}//end i
+
+	//init ia, ja, and ar
+	int * ia = new int[1 + iaja_size];
+	int * ja = new int[1 + iaja_size];
+	double * ar = new double[1 + iaja_size];
+	assert(ia && ja && ar);
+
+	int ia_id = 1;
+	row_id = 1;
+	for (auto & c : constraints)
+	{
+    auto coeffs_it = c.coeffs.begin();
+    //check if we have sufficient number of coefficients
+    if(c.coeffs.empty()==false)
+      assert(c.coeffs.size()==c.vids.size());
+    //now create constraints
+		for (auto vid : c.vids)
+		{
+			ia[ia_id] = row_id;
+			ja[ia_id] = vid + 1;
+      if(c.coeffs.empty()) ar[ia_id] = 1;
+      else{
+        ar[ia_id] = *coeffs_it;
+        coeffs_it++;
+      }
+      //cout<<"ia["<<ia_id<<"]="<<ia[ia_id]<<" ja["<<ia_id<<"]="<<ja[ia_id]<<" ar["<<ia_id<<"]="<<ar[ia_id]<<endl;
+			ia_id++;
+		}//end for j
+
+		row_id++;
+	}//end for i
+
+
+	glp_load_matrix(lp, iaja_size, ia, ja, ar);
+
+	//assert(glp_simplex(lp, NULL) == 0);
+	//assert(glp_get_status(lp) == GLP_OPT);
+
+	glp_iocp parm;
+	glp_init_iocp(&parm);
+	parm.pp_tech = GLP_PP_ALL;
+	parm.presolve = GLP_ON;
+	parm.clq_cuts = GLP_ON;
+	parm.binarize = GLP_ON;
+	//parm.cb_func = callback;
+	parm.cb_info = this;
+
+	parm.tm_lim = 18000000; //1800 sec
+	int err = glp_intopt(lp, &parm);
+	//cout << "err=" << err << endl;
+
+	double z = glp_mip_obj_val(lp);
+	//cout << "objective value=" << z << endl;
+
+
+	//get mip status
+	int glp_prim_stat = glp_mip_status(lp);
+
+	switch (glp_prim_stat)
+	{
+  	case GLP_OPT: cout << "solution is optimal;" << endl; break;
+  	case GLP_FEAS: cout << "solution is feasible;" << endl; break;
+  	case GLP_INFEAS: cout << "solution is infeasible;" << endl; break;
+  	case GLP_NOFEAS: cout << "problem has no feasible solution;" << endl; break;
+  	case GLP_UNBND: cout << "problem has unbounded solution;" << endl; break;
+  	case GLP_UNDEF: cout << "solution is undefined." << endl; break;
+	}
+
+	bool solution_found = glp_prim_stat == GLP_OPT || glp_prim_stat == GLP_FEAS;
+
+	if (solution_found)
+	{
+    vector<MySchedule*> timed_schedules_vector; //linearized version of timed_schedules
+    timed_schedules_vector.resize(ts_size);
+    for(auto& ts : timed_schedules)
+      timed_schedules_vector[ts.second]=ts.first;
+
+		for (int i = 1; i <= ts_size; i++)
+		{
+			double x = glp_mip_col_val(lp, i);
+      if(x!=0)
+			   opt.push_back(*timed_schedules_vector[i-1]);
+		}
+	}
+
+	glp_delete_prob(lp);
+	delete[] ia;
+	delete[] ja;
+	delete[] ar;
+
+	return opt.size();
+}
+
+void
+MyPCoverPlanner::schedule2timedschedules
+(MyPCoverPlanner::MySchedule & base, vector<MyPCoverPlanner::MyTimedSchedule>& Tschedules)
+{
+    //vector<MyTimedSchedule> result;
+    MyTimedSchedule schedule(base);
+
+    int chicken_needed=schedule.chicken_needed;
+    schedule.chicken_needed=1;
+    double cur_time=drand48()*0.01;
+    schedule.start_time=cur_time;
+
+    cout<<"schedule.start_time="<<schedule.start_time<<endl;
+    Node * pre=NULL;
+
+    //create the first timed schedule
+    list<Node *> no_repeats;
+    for(Node * n : schedule.nodes)
+    {
+      if(pre==n) continue;
+      if(pre!=NULL){
+        float w=getWeight_no_exit(pre, n);
+        if(w==-FLT_MAX){
+          w=dist2time( (pre->pos-n->pos).norm() );
+        }
+        cur_time+=w;
+      }
+      no_repeats.push_back(n);
+      schedule.arrival_times.push_back(cur_time);
+      pre=n;
+    }
+    schedule.nodes.swap(no_repeats);
+    Tschedules.push_back(schedule);
+
+    //create the rest of timed schedules offset by the latency
+    for(int i=1;i<=chicken_needed;i++)
+    {
+      schedule.start_time+=m_latency;
+      list<double> arrival_times;
+      for(double t : schedule.arrival_times)
+          arrival_times.push_back(t+m_latency);
+      schedule.arrival_times.swap(arrival_times);
+      Tschedules.push_back(schedule);
+    }
+    //done
+}
+
+//get travel time from the charging station
+const unordered_map<MyPCoverPlanner::Node *, double> &
+MyPCoverPlanner::MyTimedSchedule::getTT()
+{
+  if(node2tt.empty()){
+    auto atime=this->arrival_times.begin(); //travel time from the charging station along this tour
+    for(Node * node : this->nodes)
+    {
+      node2tt[node]=*atime;
+      atime++;
+    }
+  }
+  return node2tt;
+}
 
 //a simple helper methods that check if a node pcover
 //(in the form of iterators) is valid
 bool MyPCoverPlanner::valid_node_pcover
-(list<vector< pair<double,MyPCoverPlanner::MyTimedSchedule*> >::iterator> & pcover)
+(list<vector< pair<double,MyPCoverPlanner::MySchedule*> >::iterator> & pcover)
 {
   auto first_uav=pcover.front();
   auto last_uav=pcover.back();
@@ -2384,6 +2718,68 @@ bool MyPCoverPlanner::valid_node_pcover
   //cout<<"time diff="<<time_diff<<" m_latency="<<m_latency<<endl;
   //first uav will come after m_lattency time units
   return time_diff<=m_latency;
+}
+
+
+//given a node and the required arrival time interval (arrive_low, arrive_hi)
+//where arrive_low<=arrive_hi, update this->start_interval if possible
+//return true if start_interval is updated
+bool MyPCoverPlanner::MyFlexibleTimedSchedule::update_start_interval
+(Node * n, double arrive_low, double arrive_hi)
+{
+  double time2n=this->node_2_arrival_times[n]; //time needed to arrive n
+  double s=0,e=arrive_hi-time2n; //s: earliest start time, e: latest start time
+  if(time2n<arrive_low) s=arrive_low-time2n;
+  if(s+time2n>arrive_hi) return false; //cannot arrive before arrive_hi
+  if(e<s) return false; //this cannot be achieved
+
+  //(s,e) is the departure time interval for this schedule
+  //check if it overlaps with the current schedule
+  MyInterval new_start = this->start_interval.intersect(MyInterval(s,e));
+
+  if(!new_start.valid()) return false;
+  this->start_interval=new_start;
+  // if(e<this->start_interval.s) return false; //not overlap
+  // if(s>this->start_interval.e) return false; //not overlap
+  //
+  // this->start_interval.s=max(s, this->start_interval.s);
+  // this->start_interval.e=min(e, this->start_interval.e);
+
+  return true;
+}
+
+//update start interval using all nodes in this schedule
+void MyPCoverPlanner::MyFlexibleTimedSchedule::update_start_interval
+(double arrive_low, double arrive_hi)
+{
+  for(Node * n : nodes){
+    if(!update_start_interval(n,arrive_low,arrive_hi)) break;
+  }
+}
+
+//can this schedule cover the given node between the given times (arrive_low, arrive_hi)
+//this also considers the needed charging time
+bool MyPCoverPlanner::MyFlexibleTimedSchedule::is_covered
+(Node * n, double arrive_low, double arrive_hi, double charging)
+{
+  double time2n=this->node_2_arrival_times[n]; //time needed to arrive n
+  double s=0,e=arrive_hi-time2n; //s: earliest start time, e: latest start time
+  if(time2n<arrive_low) s=arrive_low-time2n;
+  if(s+time2n>arrive_hi) return false; //cannot arrive before arrive_hi
+  if(e<s) return false; //this cannot be achieved
+
+  //now we must start between (s,e) to arrive the node on time
+  //check if we can do so
+  double E=this->start_interval.e;
+  while(E<s) E+=(this->duration+charging);
+  //E+=(this->duration+charging); //this is the first time (S,E) may overlap with (s,e)
+  double S=E-this->start_interval.e+this->start_interval.s;
+
+  while(S<e){
+    if(S>=s) return true;
+    S+=(this->duration+charging);
+  }
+  return false;
 }
 
 }//end namespace GMUCS425

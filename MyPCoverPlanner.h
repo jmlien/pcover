@@ -1,7 +1,9 @@
 #pragma once
 
 #include "MyScene.h"
+#include "MyInterval.h"
 #include <set>
+#include <unordered_map>
 
 namespace GMUCS425
 {
@@ -28,6 +30,7 @@ class MyPCoverPlanner
 {
 public:
 
+  struct MySchedule;      //defined later
   struct MyTimedSchedule; //defined later
 
 protected:
@@ -57,7 +60,7 @@ protected:
 
       float dist2station; //distance to charging station
       float time2station; //time to charging station
-      list<Point2d> path2station; //path to charging station
+      list<Point2d> path2station; //note: this is in fact path *FROM* charging station
 
       float t; //age, in milliseconds
       bool free; //is this node free of obstacles?
@@ -69,19 +72,19 @@ protected:
       Node * parent;
       list<Node*> children;
       bool visited;
-      float dist; //distance to root
+      float dist; //distance to the root
 
       //
       // data for timed schedule
       //
 
       //PCover for this node
-      typedef vector<MyTimedSchedule*> PCover;
+      typedef vector<MySchedule*> PCover;
 
       //a vector of timed tours passing through this node
-      //float: arrivial time at this node
-      //MyTimedSchedule *: a schedule that arrived this node
-      vector< pair<double, MyTimedSchedule*> > timed_schedules;
+      //double: arrivial time at this node
+      //MySchedule *: a schedule that arrived this node
+      vector< pair<double, MySchedule*> > timed_schedules;
 
       // a list of valid PCover for this node
       list<PCover> valid_pcovers;
@@ -112,17 +115,20 @@ protected:
 
 public:
 
-  struct MySchedule : public list<Point2d>
+  struct MySchedule : public list<Point2d> //trajectory....
   {
     MySchedule(){ duration=0; chicken_needed=1; }
 
-    //set<Node *> nodes;
-    list<Node *> nodes;
-    float duration;
-    int chicken_needed;
+    list<Node *> nodes; //all nodes this schedule visits before the latency contraint
+                        //is violated (assumeing all nodes start at 0)
+
+    float duration;     //time to finish the tour
+    int chicken_needed; //number of chickens needed for this schedule
   };
 
+
   //schedule with information of arrivial times for visited nodes
+  //this class assumes one chicken per timed schedule
   struct MyTimedSchedule : public MySchedule
   {
     MyTimedSchedule(){ start_time=0; }
@@ -132,8 +138,72 @@ public:
       chicken_needed=schedule.chicken_needed;
       start_time=0;
     }
+    MyTimedSchedule(const MyTimedSchedule& schedule){
+      nodes=schedule.nodes;
+      duration=schedule.duration;
+      chicken_needed=schedule.chicken_needed;
+      start_time=0;
+      arrival_times=schedule.arrival_times;
+      start_time=schedule.start_time;
+      node2tt=schedule.node2tt;
+    }
+
+    //extra data
+    //arrival time of each node
     list<double> arrival_times; //one for each node, so nodes.size==arrival_times.size
+
     double start_time;
+
+    //get travel time from the charging station
+    const unordered_map<Node *, double> & getTT();
+
+  private:
+    unordered_map<Node *, double> node2tt; //mapping node to traval time
+  };
+
+  // 2nd version of time schedule
+  // schedule with information of arrivial times for visited nodes
+  //
+  struct MyFlexibleTimedSchedule : public MyTimedSchedule
+  {
+    MyFlexibleTimedSchedule(){
+      start_time=0;
+      ///in this case the interval is invalid
+    }
+    MyFlexibleTimedSchedule(const MySchedule& schedule)
+    : MyTimedSchedule(schedule)
+    {
+      start_time=DBL_MAX; //start_time is ignored in this class.
+      start_interval.set(0,DBL_MAX);
+      if(arrival_times.size()==nodes.size() && nodes.size()>0){
+        auto ia=arrival_times.begin();
+        for(auto in=nodes.begin(); in!=nodes.end();in++,ia++)
+          node_2_arrival_times[*in]=*ia;
+      }
+      else cerr<<"! Warning: MyFlexibleTimedSchedule is not properly built"<<endl;
+    }
+
+    MyFlexibleTimedSchedule(const MyFlexibleTimedSchedule& schedule)
+    : MyTimedSchedule(schedule)
+    {
+      start_interval=schedule.start_interval;
+      node_2_arrival_times=schedule.node_2_arrival_times;
+    }
+
+    //given a node and the required arrival time interval (arrive_low, arrive_hi)
+    //where arrive_low<=arrive_hi, update this->start_interval if possible
+    //return true if start_interval is updated
+    bool update_start_interval(Node * n, double arrive_low, double arrive_hi);
+
+    //update start interval using all nodes in this schedule
+    void update_start_interval(double arrive_low, double arrive_hi);
+
+    //can this schedule cover the given node between the given times (arrive_low, arrive_hi)
+    //this also considers the needed charging time
+    bool is_covered(Node * n, double arrive_low, double arrive_hi, double charging);
+
+    unordered_map<Node *, double> node_2_arrival_times; //mapping node to arrival time assime the chicken starts at time 0
+    MyInterval start_interval; //the chicken can start within the time interval
   };
 
   ///--------------------------------------------------
@@ -196,6 +266,7 @@ protected:
   void schedule_lollipop_lp2();
   void schedule_dijkstra_lp();
   bool schedule_hybrid(int trials);
+  bool schedule_rolling();
 
   //return true if m_agent collide with a non-movable object
   //at a given location
@@ -214,12 +285,20 @@ protected:
   float dist2time(float dist);
 
   //nodes visited by the given path
+  //return nodes along the path that can be visited before the deadline
   list<Node *> visitedNodes(const list<Point2d>& path, float arrival_time);
+
+  //this version gets all visited nodes along the path regardless the latency constraint
+  inline list<Node *> visitedNodes(const list<Point2d>& path);
 
   //build shortest path tree
   void dijkstra(Node * root);
+
   //get desendents on dijkstra's tree
   void get_desendents(Node * n, vector<Node*> & decendents);
+
+  //create schedules from TSP and/or lollipop tours
+  void collect_schedules(vector<MySchedule>& schedules, int tsp_trials, bool do_lollipop=false);
 
   struct Lollipop_Node
   {
@@ -405,11 +484,24 @@ protected:
   void build_pcovers_from_timed_schedules(Node * n);
 
   //check if a node pcover is valid
-  bool valid_node_pcover(list<vector< pair<double,MyTimedSchedule*> >::iterator> & pcover);
+  bool valid_node_pcover(list<vector< pair<double,MySchedule*> >::iterator> & pcover);
 
   //check if the schedule time is valid
   //bool isvalid(MySchedule& s, Node * new_n);
 
+
+  //check if a node is pcoverd by the timed schedule (ts) with the schedules in
+  //n->timed_schedules
+  bool is_pcovered(Node * n, MyTimedSchedule * ts, double& witness);
+
+  //check if a node is pcoverd by the timed schedules in n->timed_schedules
+  //assume n->timed_schedules is sorted by arrival time
+  bool is_pcovered(Node * n, double& witness);
+
+  //check if a node is pcoverd by the provided timed schedules
+  //assume timed_schedules is sorted by arrival time
+  bool is_pcovered
+  (Node * n, vector< pair<double, MySchedule*> >& timed_schedules, double& witness);
 
   struct LP_constraints
   {
@@ -446,6 +538,11 @@ protected:
   //find the optimal subset of timed schdules from node pcovers
   int SolveLP(vector<MyTimedSchedule>& opt);
 
+  //check if proposed_ts to conver all nodes in "nodes"
+  int SolveLP
+  (list<Node *>& nodes, const vector<MyTimedSchedule>& proposed_ts, vector<MyTimedSchedule>& opt_ts);
+
+
   //compute a matrix represention of the graph
   typedef vector< pair<Node *, float> > TSP; //<node, time>
 
@@ -457,9 +554,12 @@ protected:
   Lollipop tsp2lollipop(TSP& tsp);
 
   //build a schedule from a tour and its start
+  //return the iterator of tour that cannot fit into this current schedule
   TSP::const_iterator build_valid_schedule_from_tsp
   (const TSP& tour, TSP::const_iterator start, MySchedule& schedule);
 
+  //build a schedule from a tour and its start and
+  //add the schedule to "schedules"
   void build_valid_schedule_from_tsp
   (const MyPCoverPlanner::TSP& tour,
    MyPCoverPlanner::TSP::const_iterator start,
