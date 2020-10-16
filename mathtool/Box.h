@@ -21,7 +21,6 @@ public:
   Box2d();
 
   Box2d& setFromPoints(const std::vector<Vector2d>& points);
-
   bool intersect(const Box2d& box) const;
 
   double x { 0 };

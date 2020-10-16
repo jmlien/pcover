@@ -21,6 +21,8 @@ using namespace std;
 //#include "mathtool/Box.h"
 #include "tsp_writer.h"
 
+int TSP_SEED=0;
+
 void GraphTSP::FindTSPConcorde(vector< vector< int >  > & matrix, //the graph
                      vector<GraphTSP::TSPPath> &paths, //output
                      const int max_paths)
@@ -46,12 +48,17 @@ void GraphTSP::FindTSPConcorde(vector< vector< int >  > & matrix, //the graph
   const int max_failed_attempts=500;
   int failed_attempts=0;
 
+  srand(TSP_SEED);
+
   for (int i = 0; i < 100 * max_paths; ++i)
   {
 
     if(failed_attempts>=max_failed_attempts) break;
 
     const string clock_str = std::to_string(std::rand()); //clock());
+
+//cout<<"clock_str="<<clock_str<<endl;
+
     const string solution_path = "tsp_solution_" + clock_str + ".txt";
     const string cmd_output = "tsp_solution_" + clock_str + "_dump.txt";
     const string init_upper_bound = std::to_string(matrix.size());
@@ -111,6 +118,7 @@ void GraphTSP::FindTSPConcorde(vector< vector< int >  > & matrix, //the graph
 
     //check if the path is unique
     string ps = toString(path);
+    //cout<<"ps="<<ps<<endl;
     bool found=false;
     for(string & ps2 : path_strings)
     {
@@ -121,10 +129,12 @@ void GraphTSP::FindTSPConcorde(vector< vector< int >  > & matrix, //the graph
     std::remove(solution_path.c_str());
 
     if(found) {
-      cout<<"- found duplicates: "<<ps<<endl;
+      //cout<<"- found duplicates: "<<ps<<endl;
       failed_attempts++;
       continue; //duplicated path
     }
+
+    cout<<"."<<flush;
 
     paths.push_back(path);
     path_strings.push_back(ps);
@@ -133,7 +143,7 @@ void GraphTSP::FindTSPConcorde(vector< vector< int >  > & matrix, //the graph
     if (paths.size() >= max_paths)
       break;
   }
-
+  cout<<endl;
   //std::remove(tsp_file_path.c_str());
 
   //cout<<"TSP DONE: "<<paths.size()<<" paths found"<<endl;

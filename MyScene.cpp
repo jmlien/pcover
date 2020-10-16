@@ -8,6 +8,8 @@
 
 #include <fstream>
 
+extern int TSP_SEED;
+
 namespace GMUCS425
 {
 
@@ -50,6 +52,7 @@ bool MyScene::create( std::istream & inputfile)
   //for persisten covering parameters
   int pcover_grid_width=10, pcover_grid_height=10;
   string pcover_method;
+  string graph_filename; //if any....
   float battery=0, charging_time=0, latency=0;
   int seed=0;
 
@@ -128,8 +131,10 @@ bool MyScene::create( std::istream & inputfile)
     else if(backdropName=="seed")
     {
       inputfile >>seed;
+      seed=time(NULL);
       std::srand(seed);
       srand48(seed);
+      TSP_SEED=seed;
     }
     else if(backdropName=="method")
     {
@@ -150,6 +155,10 @@ bool MyScene::create( std::istream & inputfile)
     else if(backdropName=="latency")
     {
       inputfile >>latency;
+    }
+    else if(backdropName=="graph")
+    {
+      inputfile >>graph_filename;
     }
     else //create backdrop from file
     {
@@ -268,10 +277,10 @@ bool MyScene::create( std::istream & inputfile)
           agent = new MyChickenAgent(battery,charging_time);
         }
         else if(c=='d'){
-          agent = new MyDragonAgent(pcover_method, battery,charging_time,latency,pcover_grid_width,pcover_grid_height);
+          agent = new MyDragonAgent(pcover_method, battery,charging_time,latency,pcover_grid_width,pcover_grid_height,graph_filename);
           ((MyDragonAgent*)agent)->setChickenInfo("k", objs["k"]->scale);
         }
-        else 
+        else
           agent = new MyAgent(rent->agent);
 
         assert(agent);
@@ -309,7 +318,7 @@ bool MyScene::create( std::istream & inputfile)
   //seed again...
   std::srand(seed);
   srand48(seed);
-  
+
   //done!
   return true;
 }

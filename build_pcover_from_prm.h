@@ -7,73 +7,128 @@ namespace GMUCS425
 {
 
 //build a graph from grid
-inline bool build_graph_from_grid(MyPCoverPlanner& pcover, const mathtool::Point2d& start)
+inline bool build_graph_from_prm(MyPCoverPlanner& pcover, const mathtool::Point2d& start)
 {
   using namespace std;
   using namespace mathtool;
+  float sensor_w=pcover.getSensorWidth();
+  float sensor_h=pcover.getSensorHeight();
+  float screen_w=getMyGame()->getScreenWidth();
+  float screen_h=getMyGame()->getScreenHeight();
+
+  auto addnode = [&](const Point2d& pos){
+    MyPCoverPlanner::Node n;
+    n.pos=pos;
+    n.latest_valid_time=pcover.m_latency; //must be visited before the initial latency
+    n.free =true;
+    int id=pcover.m_graph.add_node(n);
+    pcover.m_graph.nodes[id].data.id=id;
+  };
+
+  if(pcover.collision_detection(start)) {
+    cerr<<"! Error: build_graph_from_prm start="<<start<<" is in collision"<<endl;
+    return false;
+  }
+  addnode(start);
+
+  auto tooclose = [&](const Point2d& pos)->bool
+  {
+    for(auto& node : pcover.m_graph.nodes){
+      Vector2d vec=node.data.pos-pos;
+      if( fabs(vec[0])<sensor_w && fabs(vec[1])<sensor_h ) return true;
+    }
+    return false;
+  };
+
+  auto tooclose2e = [&](const Point2d& pos,int i, int j)->bool
+  {
+    for(auto& node : pcover.m_graph.nodes){
+      if(node.data.id==i || node.data.id==j) continue; //ignore
+      Vector2d vec=node.data.pos-pos;
+      if( fabs(vec[0])<sensor_w && fabs(vec[1])<sensor_h ) return true;
+    }
+    return false;
+  };
+
+
 
   //check if the start is valid (i.e., inside the screen)
-  if(start[0]<0 || start[1]>=getMyGame()->getScreenWidth()) return false;
+  if(start[0]<0 || start[1]>=screen_w) return false;
 
-  std::vector< std::vector<MyPCoverPlanner::Node> > grid(pcover.m_height, std::vector<MyPCoverPlanner::Node>(pcover.m_width,MyPCoverPlanner::Node()) );
-  float cell_w=getMyGame()->getScreenWidth()*1.0f/pcover.m_width;
-  float cell_h=getMyGame()->getScreenHeight()*1.0f/pcover.m_height;
-
-  //TODO: go through the nodes, and init the data for each node
-  int nid=0;
-  for(int i=0;i<pcover.m_height;i++)
+  //create (pcover.m_height * pcover.m_width samples)/2
+  int needed_samples=pcover.m_height * pcover.m_width/2;
+  int sampled_size=0;
+  while(sampled_size<needed_samples)
   {
-    for(int j=0;j<pcover.m_width;j++)
-    {
-      MyPCoverPlanner::Node & n=grid[i][j];
+    Point2d pos(sensor_w/4+ (screen_w-sensor_w/4)*drand48(),sensor_h/4+ (screen_h-sensor_h/4)*drand48());
+    if(pcover.collision_detection(pos)) continue;
+    if(tooclose(pos)) continue;
+    addnode(pos);
+    sampled_size++;
+  }
 
-      n.latest_valid_time=pcover.m_latency; //must be visited before the initial latency
+  //add connections
+  const int K=3;
+  sampled_size=pcover.m_graph.nodes.size();
+  for(int i=0;i<sampled_size;i++){
+    auto & node_i=pcover.m_graph.nodes[i].data;
+    vector< pair<double,int> > K_nearest;
+    for(int j=0;j<sampled_size;j++){
+      if(i==j) continue;
+      auto & node_j=pcover.m_graph.nodes[j].data;
+      //check if node[i] and node[j] can be connected without getting too close to other nodes
+      Vector2d vec=(node_i.pos-node_j.pos);
+      K_nearest.push_back({vec.normsqr(), j});
+    }
+    sort(K_nearest.begin(),K_nearest.end());
+    int k=std::min(K,(int)K_nearest.size());
+    while( (k--)>0 ){
+      int j=K_nearest[k].second;
+      auto & node_j=pcover.m_graph.nodes[ j ].data;
+      Vector2d vec=(node_j.pos-node_i.pos);
+      float dist=vec.norm();
+      int ticks=20;
+      vec=vec/ticks;
+      //float step_size=1;
+      //vec=vec/dist;
+      //int ticks=(int)(dist/step_size);
+      bool valid=true;
+      for(int step=1;step<ticks;step++){
+        Point2d pos=node_i.pos+vec*step;
+        if(pcover.collision_detection(pos)){ valid=false; break; }
+        //if(tooclose2e(pos, node_i.id, node_j.id)) {valid=false; break;}
+      }
+      if(!valid){continue;}//not a valid connection
 
-      n.pos.set( cell_w*(j+0.5f), cell_h*(i+0.5f) );
-      //check if the node is free of collision
-      n.free = !pcover.collision_detection(n.pos);
-      //cout<<"node ("<<j<<","<<i<<") is free="<<n.free<<endl;
-      if(n.free) n.id=pcover.m_graph.add_node(n);
-    }//end j
-  }//end i
+      dist=pcover.dist2time(dist);
+      node_i.neighbors.push_back( make_pair(&node_j,dist));
+      node_j.neighbors.push_back( make_pair(&node_i,dist));
+      pcover.m_graph.add_edge(i, j, dist);
+    }
+  }
 
-  //Make connections
-  for(int i=0;i<pcover.m_height;i++)
-  {
-    for(int j=0;j<pcover.m_width;j++)
-    {
-      MyPCoverPlanner::Node & n=grid[i][j];
-      if(!n.free) continue; //this node is in collision, no neighbors
-      //connect the neighboring cells
-      for(int dx=-1;dx<2;dx++)
-      {
-        int nj=j+dx;
-        if(nj<0 || nj>=pcover.m_width) continue;
-        for(int dy=-1;dy<2;dy++)
-        {
-          int ni=i+dy;
-          if(ni<0 || ni>=pcover.m_height) continue;
-          MyPCoverPlanner::Node & nei = grid[ni][nj];
-          if(&nei==&n) continue; //the node itself
+  //find which node is closest to S
+  MyPCoverPlanner::Node * S=NULL;
+  float D=FLT_MAX;
+  for(int i=0;i<sampled_size;i++){
+    auto & node=pcover.m_graph.nodes[i].data;
+    float d=(node.pos-start).normsqr();
+    if(d<D){
+      D=d;
+      S=&node;
+    }
+  }
 
-          if(pcover.collision_detection(n.pos, nei.pos)) continue; //not passable
-          float dist=pcover.cost(n.pos, nei.pos);
-          if(nei.free){
-            pcover.m_graph.nodes[n.id].data.neighbors.push_back( make_pair(&pcover.m_graph.nodes[nei.id].data,dist));
-            pcover.m_graph.add_edge(n.id, nei.id, dist);
-          }
-        }//end for dy
-      }//end for dx
-      //cout<<"n has "<<n.neighbors.size()<<" neis"<<endl;
-    }//end j
-  }//end i
+  cout<<"- Created a graph using PRM with "<<sampled_size<<" nodes and "<<pcover.m_graph.edges.size()<<" edges"<<endl;
 
-  MyPCoverPlanner::Node * S=&grid[(int)(start[1]/cell_h)][(int)(start[0]/cell_w)];
-  if(pcover.m_charging_station!=NULL) pcover.m_charging_station->b_charging_station=false;
-  pcover.m_graph.nodes[S->id].data.b_charging_station = true;
-  pcover.m_charging_station=&pcover.m_graph.nodes[S->id].data;
+  if(S!=NULL){
+    if(pcover.m_charging_station!=NULL) pcover.m_charging_station->b_charging_station=false;
+    S->b_charging_station = true;
+    pcover.m_charging_station=S;
+    return true;
+  }
 
-  return true;
+  return false; //S==NULL
 }
 
 }//end namespace

@@ -1,7 +1,7 @@
 40 40
 seed 10
-perlin 3 3 cubic 1 0.1 blend imgs/rock.jpeg imgs/water.jpeg
-method shortest_lp
+perlin 3 3 cubic 1 0.1 blend imgs/dry.jpg imgs/rock-white.jpg
+method tsp_greedy
 regions 10 10
 battery  5000
 charging 11000
@@ -10,12 +10,13 @@ latency  5000
 Objects
 b imgs/cannonball.png 0.0 0.15
 t imgs/tower.png 0.0 0.45
-w imgs/brick.png 0.0 0.2
+w imgs/tree.png 0.0 0.45
+x imgs/dead-tree-3.png 0.0 0.3
 
 Characters
 z imgs/zombie.png 0.05
-k imgs/chicken.png  0.1
-d imgs/dragon.png 0.08
+k imgs/drone-0.png  0.3
+d imgs/dragon.png 0.05
 
 
 World
@@ -27,16 +28,16 @@ oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
-ooooooooooooooooooooooooooooootooooooooo
 oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooowooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 ooooooooootooooooooooooooooooooooooooooo
-ootooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
+otoooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
@@ -45,16 +46,16 @@ oooooooooooooooooooooooooooooooooooooooo
 oooooooooooodooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
-oooooooooooooooooooooooooooooooooootoooo
+oooooooooooooooooooooooooooooootoooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
+ooooooooooxooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
-ooooooooooooooooooootooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo

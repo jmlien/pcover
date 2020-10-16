@@ -12,10 +12,30 @@ namespace GMUCS425
   void MyChickenAgent::display()
   {
     if(!this->visible) return; //not visible...
+
     //setup positions and ask sprite to draw something
     float my_W=this->sprite->getWidth(scale);
     float my_H=this->sprite->getHeight(scale);
-    this->sprite->display(x-my_W/2, y-my_H/2, scale, 0, NULL, left?SDL_FLIP_HORIZONTAL:SDL_FLIP_NONE);
+    float xpos=x-my_W/2;
+    float ypos=y-my_H/2;
+
+    if(this->m_pcover!=NULL){
+      float sensor_w=m_pcover->getSensorWidth();
+      float sensor_h=m_pcover->getSensorHeight();
+      SDL_Rect box; //create a rect
+      box.x = xpos-(sensor_w-my_W)/2;  //controls the rect's x coordinate
+      box.y = ypos-(sensor_h-my_H)/2; // controls the rect's y coordinte
+      box.w = sensor_w; // controls the width of the rect
+      box.h = sensor_h; // controls the height of the rect
+      float bat_per=(m_battery/m_battery_capacity);
+      SDL_SetRenderDrawColor(getMyGame()->getRenderer(),(1-bat_per)*255,bat_per*255,0,100);
+      //SDL_RenderDrawRect(getMyGame()->getRenderer(),&box);
+      SDL_SetRenderDrawBlendMode(getMyGame()->getRenderer(), SDL_BLENDMODE_ADD);
+
+      SDL_RenderFillRect(getMyGame()->getRenderer(),&box);
+    }
+    //draw sprite
+    this->sprite->display(xpos, ypos, scale, m_angle, NULL, left?SDL_FLIP_HORIZONTAL:SDL_FLIP_NONE);
 
     //SDL_Renderer * renderer=getMyGame()->getRenderer();
     //if(this->leader) SDL_SetRenderDrawColor(renderer,255,0,0,100);
@@ -64,7 +84,7 @@ namespace GMUCS425
       if(m_path.empty() || (m_battery<=0 && is_inside_charing_station()) )
       {
         m_state='c';
-        cout<<"- UAV arrived at charging base with battery: "<<m_battery<<endl;
+        cout<<"- UAV arrived at charging base with battery: "<<(m_battery/m_battery_capacity)*100<<"%"<<endl;
         m_charging_time_left=m_charging_time;
         assert(m_pcover);
         //move the chicken to the center
@@ -74,7 +94,7 @@ namespace GMUCS425
       }
       else //still have unfinished task and outside charging station
       {
-        if(m_battery<=0) //out of battery
+        if(m_battery<=-10) //out of battery
         {
           m_state='f'; //failed
           cout<<"- UAV failed with no battery left..."<<endl;
@@ -159,6 +179,12 @@ namespace GMUCS425
     v=v*(delta/vnorm);
     left=(v[0]<0); //facing left now?
     m_f_pos=m_f_pos+v;
+
+    v=v.normalize();
+    if(!left)
+      m_angle=atan2(v[1],v[0])*180/PI;
+    else
+      m_angle=-atan2(v[1],-v[0])*180/PI;
 
     //check terrain, if the dragon is in watery area, slow down
     // const Uint32 * terrain = getMyGame()->getSceneManager()->get_active_scene()->get_terrain();

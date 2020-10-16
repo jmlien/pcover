@@ -5,6 +5,7 @@
 #include <algorithm>
 #include "glpk/glpk.h" //linear programming solver
 #include <map>
+#include <sstream>
 
 using namespace mathtool;
 
@@ -42,69 +43,86 @@ float MyPCoverPlanner::cost(const Point2d& pos1, const Point2d& pos2)
 {
   return dist2time((pos1-pos2).norm());
 
-  const Uint32 * terrain = m_scene->get_terrain();
-  int terrain_width = getMyGame()->getScreenWidth();
-  int terrain_height = getMyGame()->getScreenHeight();
-  Point2d mid( (pos1[0]+pos2[0])/2, (pos1[1]+pos2[1])/2 );
-  Uint32 watery=terrain[((int)mid[1])*terrain_width+((int)mid[0])] & 255;
-  float scale=sqrt(sqrt(watery*1.0f/255)); //0~1
-  return (1+scale) * (pos1-pos2).norm();
+  // const Uint32 * terrain = m_scene->get_terrain();
+  // int terrain_width = getMyGame()->getScreenWidth();
+  // int terrain_height = getMyGame()->getScreenHeight();
+  // Point2d mid( (pos1[0]+pos2[0])/2, (pos1[1]+pos2[1])/2 );
+  // Uint32 watery=terrain[((int)mid[1])*terrain_width+((int)mid[0])] & 255;
+  // float scale=sqrt(sqrt(watery*1.0f/255)); //0~1
+  // return (1+scale) * (pos1-pos2).norm();
 }
 
 //------------
-bool MyPCoverPlanner::build() //build a grid or graph
-{
-  if(!m_grid.empty()) return false; //build only if the grid is empty
-
-  m_grid=std::vector< std::vector<Node> >( m_height, std::vector<Node>(m_width,Node()) );
-  float cell_w=getMyGame()->getScreenWidth()*1.0f/m_width;
-  float cell_h=getMyGame()->getScreenHeight()*1.0f/m_height;
-
-  //TODO: go through the nodes, and init the data for each node
-  int nid=0;
-  for(int i=0;i<m_height;i++)
-  {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
-      n.id=nid++;
-      n.pos.set( cell_w*(j+0.5f), cell_h*(i+0.5f) );
-      //check if the node is free of collision
-      n.free = !collision_detection(n.pos);
-      //cout<<"node ("<<j<<","<<i<<") is free="<<n.free<<endl;
-    }//end j
-  }//end i
-
-  //Make connections
-  for(int i=0;i<m_height;i++)
-  {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
-      if(!n.free) continue; //this node is in collision, no neighbors
-      //connect the neighboring cells
-      for(int dx=-1;dx<2;dx++)
-      {
-        int nj=j+dx;
-        if(nj<0 || nj>=m_width) continue;
-        for(int dy=-1;dy<2;dy++)
-        {
-          int ni=i+dy;
-          if(ni<0 || ni>=m_height) continue;
-          Node & nei = m_grid[ni][nj];
-          if(&nei==&n) continue; //the node itself
-
-          if(collision_detection(n.pos, nei.pos)) continue; //not passable
-          float dist=cost(n.pos, nei.pos);
-          if(nei.free) n.neighbors.push_back( make_pair(&nei,dist));
-        }//end for dy
-      }//end for dx
-      //cout<<"n has "<<n.neighbors.size()<<" neis"<<endl;
-    }//end j
-  }//end i
-
-  return true;
-}
+// //build a graph from grid
+// bool MyPCoverPlanner::build_graph_from_file
+// (const Point2d& start, const string& filename)
+// {
+//
+// }
+//
+// //build a graph from grid
+// bool MyPCoverPlanner::build_graph_from_grid(const Point2d& start)
+// {
+//   //check if the start is valid (i.e., inside the screen)
+//   if(start[0]<0 || start[1]>=getMyGame()->getScreenWidth()) return false;
+//
+//   std::vector< std::vector<Node> > grid( m_height, std::vector<Node>(m_width,Node()) );
+//   float cell_w=getMyGame()->getScreenWidth()*1.0f/m_width;
+//   float cell_h=getMyGame()->getScreenHeight()*1.0f/m_height;
+//
+//   //TODO: go through the nodes, and init the data for each node
+//   int nid=0;
+//   for(int i=0;i<m_height;i++)
+//   {
+//     for(int j=0;j<m_width;j++)
+//     {
+//       Node & n=grid[i][j];
+//       n.pos.set( cell_w*(j+0.5f), cell_h*(i+0.5f) );
+//       //check if the node is free of collision
+//       n.free = !collision_detection(n.pos);
+//       //cout<<"node ("<<j<<","<<i<<") is free="<<n.free<<endl;
+//       if(n.free) n.id=m_graph.add_node(n);
+//     }//end j
+//   }//end i
+//
+//   //Make connections
+//   for(int i=0;i<m_height;i++)
+//   {
+//     for(int j=0;j<m_width;j++)
+//     {
+//       Node & n=grid[i][j];
+//       if(!n.free) continue; //this node is in collision, no neighbors
+//       //connect the neighboring cells
+//       for(int dx=-1;dx<2;dx++)
+//       {
+//         int nj=j+dx;
+//         if(nj<0 || nj>=m_width) continue;
+//         for(int dy=-1;dy<2;dy++)
+//         {
+//           int ni=i+dy;
+//           if(ni<0 || ni>=m_height) continue;
+//           Node & nei = grid[ni][nj];
+//           if(&nei==&n) continue; //the node itself
+//
+//           if(collision_detection(n.pos, nei.pos)) continue; //not passable
+//           float dist=cost(n.pos, nei.pos);
+//           if(nei.free){
+//             m_graph.nodes[n.id].data.neighbors.push_back( make_pair(&m_graph.nodes[nei.id].data,dist));
+//             m_graph.add_edge(n.id, nei.id, dist);
+//           }
+//         }//end for dy
+//       }//end for dx
+//       //cout<<"n has "<<n.neighbors.size()<<" neis"<<endl;
+//     }//end j
+//   }//end i
+//
+//   Node * S=&grid[(int)(start[1]/cell_h)][(int)(start[0]/cell_w)];
+//   if(m_charging_station!=NULL) m_charging_station->b_charging_station=false;
+//   m_graph.nodes[S->id].data.b_charging_station = true;
+//   m_charging_station=&m_graph.nodes[S->id].data;
+//
+//   return true;
+// }
 
 // //check if the schedule with the new duration would be valid
 // bool MyPCoverPlanner::isvalid(MySchedule& s, Node * new_n)
@@ -114,20 +132,9 @@ bool MyPCoverPlanner::build() //build a grid or graph
 // }
 
 //schedule
-bool MyPCoverPlanner::schedule( const Point2d& start )
+bool MyPCoverPlanner::schedule()
 {
   m_schedules.clear();
-
-  //check if the start is valid (i.e., inside the screen)
-  if(start[0]<0 || start[1]>=getMyGame()->getScreenWidth()) return false;
-
-  float cell_w=getMyGame()->getScreenWidth()*1.0f/m_width;
-  float cell_h=getMyGame()->getScreenHeight()*1.0f/m_height;
-
-  Node * S=&m_grid[(int)(start[1]/cell_h)][(int)(start[0]/cell_w)];
-  if(m_charging_station!=NULL) m_charging_station->b_charging_station=false;
-  S->b_charging_station = true;
-  m_charging_station=S;
 
   //compute path to charging station
   cout<<"- Compute all paths from charging station"<<endl;
@@ -155,7 +162,7 @@ bool MyPCoverPlanner::schedule( const Point2d& start )
   else if(m_opt_method=="dijkstra_lp")
       schedule_dijkstra_lp();
   else if(m_opt_method=="hybrid")
-      schedule_hybrid(5);
+      schedule_hybrid(20);
   else if(m_opt_method=="rolling")
       schedule_rolling();
   else{
@@ -163,7 +170,7 @@ bool MyPCoverPlanner::schedule( const Point2d& start )
     exit(1);
   }
 
-//exit(1);
+  //exit(1);
   //
   return true;
 }
@@ -173,11 +180,9 @@ bool MyPCoverPlanner::schedule( const Point2d& start )
 void MyPCoverPlanner::schedule_shorest_paths_lp()
 {
   vector<MySchedule> schedules;
-  for(int i=0;i<m_height;i++)
+  for(auto& data : m_graph.nodes)
   {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
+      Node & n=data.data;
       if(!n.free) continue; //this node is in collision, no neighbors
 
       MySchedule schedule;
@@ -199,7 +204,6 @@ void MyPCoverPlanner::schedule_shorest_paths_lp()
       // cout<<"schedule size="<<schedule.nodes.size()<<endl;
 
       schedules.push_back(schedule);
-    }
   }
 
   //find optimal subset
@@ -287,9 +291,11 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp(int trials)
 bool MyPCoverPlanner::schedule_tsp_segments_lp2(int trials)
 {
   //
+  vector<MySchedule> schedules;
+
+  /*
   vector<TSP> tours;
   tsp(m_charging_station,tours,trials);
-  vector<MySchedule> schedules;
 
   for(int i=0;i<tours.size();i++)
   {
@@ -300,8 +306,11 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp2(int trials)
         build_valid_schedule_from_tsp(tour, it, schedules);
     }//end for tour
   }
+  */
 
-#if 00 //on/off timed schedule
+  collect_schedules(schedules, trials, false);
+
+#if 0 //on/off timed schedule
   //
   vector<MyTimedSchedule> tschedules;
   for(auto& schedule : schedules) schedule2timedschedules(schedule,tschedules);
@@ -321,7 +330,6 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp2(int trials)
     }
   }
 
-
   //get timed schedules
   {
     m_timed_schedules.clear();
@@ -335,6 +343,22 @@ bool MyPCoverPlanner::schedule_tsp_segments_lp2(int trials)
 #endif
 
   int total_chickens_needed=SolveLP(schedules,m_schedules);
+
+
+
+  //
+  // vector<MyTimedSchedule> tss;
+  // for(auto& schedule : m_schedules) schedule2timedschedules(schedule,tss);
+  // for(MyTimedSchedule& ts : tss){
+  //   auto ia=ts.arrival_times.begin();
+  //   cout<<"schedule: ";
+  //   for(Node * n : ts.nodes){
+  //     cout<<"("<< *ia << ","<<n->id<< ")->";
+  //     ia++;
+  //   }
+  //   cout<<endl;
+  // }
+  //
 
   cout<<"- Best schedule needs "<<total_chickens_needed
       <<" UAVs and "<<m_schedules.size()<<" tours"<<endl;
@@ -395,11 +419,9 @@ void MyPCoverPlanner::schedule_dijkstra_lp()
   //for each node, create a lollipop
   vector<MySchedule> schedules;
   cout<<"root id="<<m_charging_station->id<<endl;
-  for(int i=0;i<m_height;i++)
+  for(auto& data : m_graph.nodes)
   {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
+      Node & n=data.data;
       if(!n.free) continue; //this node is in collision, no neighbors
 
       //
@@ -429,7 +451,6 @@ void MyPCoverPlanner::schedule_dijkstra_lp()
       lollipop.destroy();
       //if(schedule.duration>m_battery) continue;
       schedules.push_back(schedule);
-    }
   }
 
 //  m_schedules=schedules;
@@ -446,11 +467,9 @@ void MyPCoverPlanner::schedule_lollipop_lp()
   //for each node, create a lollipop
   vector<MySchedule> schedules;
   cout<<"root id="<<m_charging_station->id<<endl;
-  for(int i=0;i<m_height;i++)
+  for(auto& data : m_graph.nodes)
   {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
+      Node & n=data.data;
       if(!n.free) continue; //this node is in collision, no neighbors
 
       //
@@ -462,7 +481,6 @@ void MyPCoverPlanner::schedule_lollipop_lp()
       MySchedule schedule=lollipop2schedule(lollipop);
       schedules.push_back(schedule);
       lollipop.destroy();
-    }
   }
 
   //m_schedules=schedules;
@@ -548,16 +566,13 @@ void MyPCoverPlanner::schedule_lollipop_lp2()
   cout<<"root id="<<m_charging_station->id<<endl;
 
   vector< pair<float, Node*> > sorted_nodes;
-  for(int i=0;i<m_height;i++)
+  for(auto& data : m_graph.nodes)
   {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
+      Node & n=data.data;
       if(!n.free) continue; //this node is in collision, no neighbors
       //if(&n==this->m_charging_station) continue;
       sorted_nodes.push_back(make_pair(-n.dist2station, &n));
-    }//end j
-  }//end i
+  }//end data
 
   sort(sorted_nodes.begin(),sorted_nodes.end());
   set<Node *> nodes_covered;
@@ -581,7 +596,7 @@ void MyPCoverPlanner::schedule_lollipop_lp2()
       //cout<<"?? lollipop.count="<<lollipop.count<<endl;
 
       MySchedule schedule=lollipop2schedule(lollipop);
-      if( m_battery-schedule.duration>750 ) continue;
+      if( m_battery-schedule.duration>750 ) continue; ///??750???
       states[lollipop.count]++;
       schedules.push_back(schedule);
       lollipop.destroy();
@@ -617,14 +632,17 @@ bool MyPCoverPlanner::schedule_rolling()
 {
   //create n flexible timed schedules
   vector<MyTimedSchedule> confirmed_ts;
+  confirmed_ts.reserve(m_num_valid_cells+1);
+
   vector<MyTimedSchedule> all_ts;
-  unordered_map< Node*, unordered_set<MyTimedSchedule*> > N2S; //node to schedules
+  unordered_map< Node*, set<MyTimedSchedule*> > N2S; //node to schedules
   unordered_map< Node*, MyInterval > last_visits; //last visited time interval
+  unordered_set<int> pcovered_nodes;
 
   {
     //get schedules for the first rounds
     vector<MySchedule> all_schedules;
-    collect_schedules(all_schedules, 10, true);
+    collect_schedules(all_schedules, 20, false);
 
     //find optimal init schedule
     vector<MySchedule> init_scheudles;
@@ -637,104 +655,218 @@ bool MyPCoverPlanner::schedule_rolling()
     }
 
     //record schedules from nodes' perspective
+    all_ts.reserve(all_schedules.size()+1);
     for(auto& s : all_schedules){
       s.chicken_needed=1; //create 1 timed tour
       schedule2timedschedules(s,all_ts);
-      MyTimedSchedule& ts=all_ts.back();
-      list<Node *> nodes = visitedNodes(ts); //collect all nodes passed through
-      for(Node * n : nodes) N2S[n].insert(&ts);
+      MyTimedSchedule & ts=all_ts.back();
+      ts.nodes = visitedNodes(ts); //collect all nodes passed through
+      for(Node * n : ts.nodes){
+        N2S[n].insert(&ts);
+        // if(n->id==5){
+        //   //auto& TT=ts.getTT();
+        //   auto ait=ts.arrival_times.begin();
+        //   for(Node * x : ts.nodes){ cout<<x->id<<" ("<<*ait<<") -> "; ait++; }
+        //   cout<<endl;
+        // }
+      }
+      //all_ts.push_back(ts);
+      //cout<<"ts="<<ts<<" has "<<ts->size()<<endl;
     }
   }
+
+/// many duplicated schedules....
+/// getTT() should have multiple entries for each node...
+
+  // for(auto& data:N2S){
+  //   for(auto& ts:data.second){
+  //     cout<<"!! ts["<<ts<<"].size = "<<ts->size()<<" ts nodes = "<<ts->nodes.size()<<endl;
+  //   }
+  // }
 
   //assign comfirmed schedule to nodes
   for(auto & ts : confirmed_ts)
   {
-    for(auto& data : ts.getTT()) //(node,time)
+    for(auto& data : ts.getTT()) //(node,times)
     {
-      //the time that this schedule arrived at this node
-      //departure time + travel time (atime)
-      double at=data.second+ts.start_time;
       Node *node=data.first;
-      node->timed_schedules.push_back({at,&ts});
+
+      for(double tt : data.second){
+        //the time that this schedule arrived at this node
+        //departure time + travel time (atime)
+        double at=tt+ts.start_time;
+        node->timed_schedules.push_back({at,&ts});
+
+        // if(node->id==5){
+        //   cout<<"--> arr time="<<at<<" by a tour start at "<<ts.start_time<<endl;
+        // }
+
+      }
     }
   }//end of for(ts)
 
-  list< pair<float, Node*> > nodes_with_problem; //witness and node
-  for(int i=0;i<m_height;i++){
-    for(int j=0;j<m_width;j++){
-      Node & n=m_grid[i][j];
+  //exit(1);
+
+  list<Node*> nodes_with_problem; //witness and node
+  for(auto& data : m_graph.nodes)
+  {
+      Node & n=data.data;
       if(!n.free) continue; //this node is in collision, no neighbors
       if(&n==this->m_charging_station) continue;
       sort(n.timed_schedules.begin(), n.timed_schedules.end());
-      double witness;
-      if(is_pcovered(&n, witness)) continue;
-      nodes_with_problem.push_back({witness,&n});
-    }
+      if(is_pcovered(&n, n.latest_valid_time)){
+        pcovered_nodes.insert(n.id);
+        continue;
+      }
+      nodes_with_problem.push_back(&n);
   }
 
   //get schedules for the rest of runs
-  bool pcovered=false; //does the map is p-covered
+  //bool pcovered=false; //does the map is p-covered
   while(!nodes_with_problem.empty()){ //proposing new schedules while the graph is not pcovered
+
+    cout<<"there are "<<nodes_with_problem.size()<<"/"<<this->m_num_valid_cells<<" nodes not pcovered"<<endl;
+    cout<<"There are "<<confirmed_ts.size()<<" comfirmed tours"<<endl;
 
     vector<MyTimedSchedule> proposed_ts;
 
-    for(auto& node : nodes_with_problem){
+    for(Node * n : nodes_with_problem){
 
-        // check if the proposed schedule of n may cover n
-        Node * n = node.second;
-        double max_w =node.first;  //previous witness
-        for(MyTimedSchedule& ts : proposed_ts){
-          double witness;
-          if(is_pcovered(n, &ts, witness)) continue;
-          if(witness>max_w) max_w=witness;
-        }
+cout<<"----- node "<<n->id<<"------ latest valid time="<<n->latest_valid_time<<endl;
+// for(auto & tmp : n->timed_schedules){
+//   cout<<tmp.first<<"->";
+// }
+// cout<<endl;
+//cout<<"there are "<<proposed_ts.size()<<" proposed tours"<<endl;
+
+        // check if the proposed schedule of n may cover or improve on n
+        bool covered=false;
+        // for(MyTimedSchedule& ts : proposed_ts){
+        //   //if( find(ts.nodes.begin(), ts.nodes.end(), n) ==ts.end() )
+        //   //  continue; //this proposed ts does not go through n
+        //   double witness;
+        //   //cout<<"check if pcovered"<<endl;
+        //   bool r=is_pcovered(n, &ts, witness);
+        //   //this node is covered by ts. or
+        //   //ts visited this node and push the deadline further.
+        //   if(witness>n->latest_valid_time+2 || r){
+        //     covered=true;
+        //     break;
+        //   }
+        // }
 
         //no proposed schedule that can improve the latency violation
         //propose new schedules with the needed start time
-        if(max_w == node.first){
-          unordered_set<MyTimedSchedule*> & schedules = N2S[n];
-          for(MyTimedSchedule* ts:schedules){
+        if(!covered){
+
+          //cout<<"propose new tours"<<endl;
+
+          //get all schedules passing throug n
+          auto & schedules = N2S[n];
+          for(MyTimedSchedule* ts: schedules){
             //create timed schedule that pushes max_w as far as possible
-            double travel_time=ts->getTT().at(n);
+            //cout<<"ts->getTT() size="<<ts->getTT().size()<<endl;
             MyTimedSchedule newts(*ts);
-            newts.start_time=max_w-travel_time; //need to arrive at max_w
-            proposed_ts.push_back(newts);
-          }
-        }
+
+            const list<double>& travel_times=ts->getTT().at(n);
+            for(double tt : travel_times){
+              //need to arrive before or at the deadline
+              newts.start_time=n->latest_valid_time-tt-1e-10;
+              // if(n->id==5){
+              //   cerr<<"passing node 5 at start time="<<newts.start_time<<" travel_time="<<tt<<" duration="<<ts->duration<<endl;
+              // }
+              if(newts.start_time<-1e-5) continue; //cannot start before time 0
+
+              //cout<<"propose to start at: "<<newts.start_time<<" duration="<<newts.duration<<endl;
+              proposed_ts.push_back(newts);
+              break;
+            }//end tt
+          }//end ts
+        }//end if covered
 
     }//end n
 
+    cout<<"There are "<<proposed_ts.size()<<" proposed tours"<<endl;
+
+    //now that we have new proposals
     //find the minimum set of proposed schedule
     vector<MyTimedSchedule> new_confirmed_ts;
-    {
-      list<Node *> nodes;
-      for(auto& data: nodes_with_problem) nodes.push_back(data.second);
-      SolveLP(nodes, proposed_ts, new_confirmed_ts);
-    }
+    SolveLP(nodes_with_problem, proposed_ts, new_confirmed_ts);
+
+    cout<<"There are "<<new_confirmed_ts.size()<<" new conformed tours"<<endl;
 
     //add solution to comfirmed schedule
-    for(MyTimedSchedule& ts : new_confirmed_ts){
+    for(MyTimedSchedule& tmp : new_confirmed_ts){
+      confirmed_ts.push_back(tmp);
+      MyTimedSchedule& ts = confirmed_ts.back();
+
+      cout<<"new comfirmed ts: start: "<<ts.start_time<<" duration="<<ts.duration<<" size="<<ts.nodes.size()<<endl;
+
       for(auto& data : ts.getTT())
       {
-        //the time that this schedule arrived at this node
-        //departure time + travel time (atime)
-        double at=data.second+ts.start_time;
         Node *node=data.first;
-        node->timed_schedules.push_back({at,&ts});
+        //node is already covered, no need to update
+        if(pcovered_nodes.find(node->id)!=pcovered_nodes.end()) continue;
+        for(double tt: data.second){
+          //the time that this schedule arrived at this node
+          //departure time + travel time (atime)
+          double at=tt+ts.start_time;
+          node->timed_schedules.push_back({at,&ts});
+        }
       }
+
+      //
+      //if(nodes_with_problem.size()==11)
+      // {
+      //   for(Node* n : nodes_with_problem){
+      //     if( ts.getTT().find(n) != ts.getTT().end() )
+      //     {
+      //       cout<<"Yes, this new tour goes through node: "<<n->id<<" at time "<<
+      //       ts.getTT().at(n)+ts.start_time<<endl;
+      //     }
+      //   }
+      // }
+      //
     }
 
     //check if the nodes are pcovered now
-    list< pair<float, Node*> > nodes_still_with_problem;
-    for(auto& data : nodes_with_problem){
-      double witness;
-      Node * n =data.second;
-      if(is_pcovered(n, witness)) continue;
-      nodes_still_with_problem.push_back({witness,n});
+    list<Node*> nodes_still_with_problem;
+    for(Node* n : nodes_with_problem){
+      if(is_pcovered(n, n->latest_valid_time)){
+        pcovered_nodes.insert(n->id);
+        continue;
+      }
+      nodes_still_with_problem.push_back(n);
     }
+
+    // for(auto& data : m_graph.nodes){
+    //   Node * n=&data.data;
+    //   if(n->id==24){
+    //     bool r= is_pcovered(n, n->latest_valid_time);
+    //     cout<<"---> Node 24 is pcoved? "<<(r?"yes ":"no ");
+    //     for(auto& ts : n->timed_schedules) cout<<ts.first<<"->";
+    //     cout<<endl;
+    //   }
+    // }
 
     nodes_with_problem.swap(nodes_still_with_problem);
   }
+
+  //free mem
+  //for(MyTimedSchedule * ts: all_ts) delete ts;
+  //all_ts.clear();
+
+
+  for(auto& data : m_graph.nodes)
+  {
+      Node & n=data.data;
+      if(!n.free) continue; //this node is in collision, no neighbors
+      if(&n==this->m_charging_station) continue;
+      if(is_pcovered(&n, n.latest_valid_time)) continue;
+      cout<<"! WTF: node "<<n.id<<" is not persistently covered"<<endl;
+  }
+
+  cout<<"There are "<<confirmed_ts.size()<<" confirmed tour"<<endl;
 
   return true;
 }//end MyPCoverPlanner
@@ -756,20 +888,38 @@ void MyPCoverPlanner::collect_schedules
     }//end for tour
   }
 
+  {//remove duplicated
+    unordered_map<string, MySchedule *> schedule_keys;
+    vector<MySchedule> unique_schedules;
+    for(MySchedule& s : schedules)
+    {
+      string key=s.to_string();
+      if(schedule_keys.find(key)==schedule_keys.end()){
+        schedule_keys[key]=&s;
+        unique_schedules.push_back(s);
+      }
+      else{
+        MySchedule * os=schedule_keys[key];
+        if( fabs(os->duration-s.duration)<1e-10 ) continue; //same schedule
+        unique_schedules.push_back(s); //same orders but different path
+      }
+    }
+    cout<<"schedules size="<<schedules.size()<<" unique_schedules="<<unique_schedules.size()<<endl;
+    unique_schedules.swap(schedules);
+  }
+
+
   if(!do_lollipop) return; //done
 
   //now add tour from lollipop
   vector< pair<float, Node*> > sorted_nodes;
-  for(int i=0;i<m_height;i++)
+  for(auto& data : m_graph.nodes)
   {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
+      Node & n=data.data;
       if(!n.free) continue; //this node is in collision, no neighbors
       if(&n==this->m_charging_station) continue;
       sorted_nodes.push_back(make_pair(-n.dist2station, &n));
-    }//end j
-  }//end i
+  }
 
   sort(sorted_nodes.begin(),sorted_nodes.end());
   set<Node *> nodes_covered;
@@ -791,7 +941,7 @@ void MyPCoverPlanner::collect_schedules
         <<" schedule size="<<schedules.size()<<endl;
 
     if(m_num_valid_cells==nodes_covered.size())
-     break; //done
+    break; //done
   }//for data
 
   return; //done with collecting schedules
@@ -1458,6 +1608,9 @@ bool MyPCoverPlanner::optimize_lollipop_simple2
   return orig_time_needed>min_time_needed;
 }
 
+
+//list< list<mathtool::Point2d> > TSP_SEGMENTS;
+
 //build a schedule from a tour and its starting node
 //return the iterator of tour that cannot fit into this current schedule
 MyPCoverPlanner::TSP::const_iterator
@@ -1466,6 +1619,10 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
  MyPCoverPlanner::TSP::const_iterator start,
  MySchedule& schedule)
 {
+  // list<mathtool::Point2d> TSP_SEGMENT;
+  // TSP_SEGMENT.push_back(start->first->pos);
+  //
+
     auto it=start; //the start of the schedule
     const int buffer=11;
 
@@ -1496,10 +1653,15 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
       //if(new_duration+m_charging>m_latency) break; //
       //cout<<"it->first->pos="<<it->first->pos<<endl;
       schedule.push_back(next->first->pos);
+
+      //TSP_SEGMENT.push_back(next->first->pos);
+
       schedule.duration=new_duration;
       it=next;
       next++;
     }//end while
+
+//TSP_SEGMENTS.push_back(TSP_SEGMENT);
 
     //cout<<"schedule.duration="<<schedule.duration<<" batter="<<m_battery<<endl;
     //given the schedule.duration determine how many chickens are needed
@@ -1578,6 +1740,7 @@ MyPCoverPlanner::build_valid_schedule_from_tsp
 
       //cout<<"it->first->pos="<<it->first->pos<<endl;
       schedule.push_back(next->first->pos);
+
       //schedule.nodes.insert(next->first);
       schedule.nodes.push_back(next->first);
       schedule.duration=new_duration;
@@ -1650,15 +1813,11 @@ bool MyPCoverPlanner::collision_detection(const Point2d& pos)
 
 void MyPCoverPlanner::update() //update the timmer of the grid
 {
-  //cout<<"update"<<endl;
-  for(int i=0;i<m_height;i++)
+  for(auto& data : m_graph.nodes)
   {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
-      if(!n.free) continue;
-      n.t+=getMyGame()->getTimeStep(); //advanced this much
-    }
+    Node & n=data.data;
+    if(!n.free) continue;
+    n.t+=getMyGame()->getTimeStep(); //advanced this much
   }
 
   //go through all agents to reset the timer
@@ -1668,6 +1827,7 @@ void MyPCoverPlanner::update() //update the timmer of the grid
   {
     if( !agent->is_movable() ) continue;
     Node * n=getNode(agent->getX(),agent->getY()); //&m_grid[(int)(agent->getY()/cell_h)][(int)(agent->getX()/cell_w)];
+    if(n==NULL) continue;
     n->t=0;
   }//end obst
 }
@@ -1767,24 +1927,73 @@ tsp(MyPCoverPlanner::Node * start,vector<MyPCoverPlanner::TSP>& TSPs, int number
 {
   vector<Node *> all_nodes;
   int id=0;
-  for(int i=0;i<m_height;i++)
+  for(auto& data : m_graph.nodes)
   {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
+      Node & n=data.data;
       if(!n.free) continue;
       n.id=id++;
       all_nodes.push_back(&n);
-    }
   }
 
   return tsp(all_nodes,start,TSPs,number);
 }
 
-//generate constranits
-void MyPCoverPlanner::generate_constraints( const vector<MySchedule>& schedules,  list<LP_constraints>& constraints)
+//generate constranits for nodes using the proposed schedules
+void MyPCoverPlanner::generate_constraints
+( const list<Node*> nodes, vector<MyTimedSchedule>& schedules,  list<LP_constraints>& constraints)
 {
-  map< Node *, set<int> > node2schdules; //which schedules go through each node
+  unordered_map< Node *, unordered_set<int> > node2schdules; //which schedules go through each node
+  for(Node * node : nodes)
+  {
+    int size=schedules.size();
+
+    vector<int> covered_by; //ts ids
+    vector< pair<double, int> > improved_by; //improvement, id
+
+    for( int i=0;i<size;i++ )
+    {
+      MyTimedSchedule & ts=schedules[i];
+      auto& TT = ts.getTT();
+      if(TT.find(node)==TT.end()) continue; //ts does not go through node
+
+      for(double tt : TT.at(node)){
+        auto arrive = tt+ts.start_time;
+        if(arrive<=node->latest_valid_time && arrive > node->latest_valid_time-m_latency){
+          node2schdules[node].insert(i);
+          // double witness;
+          // bool r=is_pcovered(node, &ts, witness);
+          // if(r) covered_by.push_back(i);
+          // else improved_by.push_back({node->latest_valid_time-arrive,i}); //or witness-node->latest_valid_time
+          break;
+        }//end if arrive
+      }//end for tt
+
+    }//end for i
+
+    // if(!covered_by.empty())
+    //   for(int i : covered_by) node2schdules[node].insert(i);
+    // else
+    //   for(auto& i : improved_by) node2schdules[node].insert(i.second);
+
+  }//end for node
+
+  //create constraints for each node
+  for(auto & cons : node2schdules)
+  {
+    LP_constraints lpc;
+    lpc.vids=vector<int>(cons.second.begin(),cons.second.end());
+    lpc.type=GLP_LO;
+    lpc.lower_bound=1;
+    constraints.push_back(lpc);
+  }
+
+}
+
+//generate constranits
+void MyPCoverPlanner::generate_constraints
+( const vector<MySchedule>& schedules,  list<LP_constraints>& constraints)
+{
+  unordered_map< Node *, set<int> > node2schdules; //which schedules go through each node
   int size=schedules.size();
   for( int i=0;i<size;i++ )
   {
@@ -1810,60 +2019,55 @@ void MyPCoverPlanner::generate_constraints( const vector<MySchedule>& schedules,
 
 //check if proposed_ts to conver all nodes in "nodes"
 int MyPCoverPlanner::SolveLP
-(list<Node *>& nodes, const vector<MyTimedSchedule>& proposed_ts, vector<MyTimedSchedule>& opt_ts)
+(list<Node *>& nodes, vector<MyTimedSchedule>& proposed_ts, vector<MyTimedSchedule>& opt_ts)
 {
-  /*
   //build constraints
   list<LP_constraints> constraints;
-  vector<float> solution; //0/1
-  int total_chickens_needed=0;
-  generate_constraints(schedules, constraints);
-
-  if(this->m_num_valid_cells<=0)
-  {
-    cerr<<"! Error: Number of valid cells="
-        <<this->m_num_valid_cells<<endl;
-    exit(1);
-  }
-
-  if(m_num_valid_cells!=constraints.size())
-  {
-    cerr<<"! Error: LP constraint size inconsistent;"
-        <<" expect "<<m_num_valid_cells<<", get "<<constraints.size()<<endl;
-    exit(1);
-  }
+  generate_constraints(nodes, proposed_ts, constraints);
+  // if(nodes.size()!=constraints.size())
+  // {
+  //   cerr<<"! Error: LP constraint size inconsistent;"
+  //       <<" expect "<<nodes.size()<<", get "<<constraints.size()<<endl;
+  //   exit(1);
+  // }
 
   //cout<<"constraints size="<<constraints.size()<<endl;
   //cout<<"schedules size="<<schedules.size()<<endl;
-  if( SolveLP(schedules, constraints, solution) )
+  vector<float> solution; //0/1
+  vector<int> variables(proposed_ts.size(),1);
+  if( SolveLP(variables, constraints, solution) )
   {
     int size=solution.size();
     for(int i=0;i<size;i++){
       if(solution[i]!=0){
-        opt.push_back(schedules[i]);
-        total_chickens_needed+=schedules[i].chicken_needed;
+        opt_ts.push_back(proposed_ts[i]);
       }
     }//end for i
   }
   else  //failed...no LP solved
     return -1;
 
-  // cout<<"- Best schedule needs "<<total_chickens_needed
-  //     <<" chickens and "<<m_schedules.size()<<" tours"<<endl;
-
-  return total_chickens_needed;
-  */
-  return 0;
+  return opt_ts.size();
 }
 
-
 bool MyPCoverPlanner::SolveLP(
-  vector<MySchedule>& schdules,
-  list<LP_constraints>& constaints,
+  vector<MySchedule>& schedules,
+  list<LP_constraints>& constraints,
   vector<float>& solution)
 {
-	int constraint_size = constaints.size();
-	int variable_size = schdules.size();
+  vector<int> variables;
+  variables.reserve(schedules.size());
+  for(MySchedule& s : schedules) variables.push_back(s.chicken_needed);
+  return SolveLP(variables, constraints, solution);
+}
+
+bool MyPCoverPlanner::SolveLP(
+  vector<int>& variables,
+  list<LP_constraints>& constraints,
+  vector<float>& solution)
+{
+	int constraint_size = constraints.size();
+	int variable_size = variables.size();
 
   cout<<"constraint_size="<<constraint_size<<" variable_size="<<variable_size<<endl;
   glp_term_out(GLP_OFF);
@@ -1880,7 +2084,7 @@ bool MyPCoverPlanner::SolveLP(
 	int row_id = 1;
 
 	char tmp[64];
-	for (auto & c : constaints)
+	for (auto & c : constraints)
 	{
 		sprintf(tmp, "r%08d", row_id);
 		glp_set_row_name(lp, row_id, tmp);
@@ -1897,13 +2101,7 @@ bool MyPCoverPlanner::SolveLP(
 		glp_set_col_name(lp, i, tmp);
 		//MIP
 		glp_set_col_kind(lp, i, GLP_BV);
-		//MIP
-		{
-			//auto & e = m->edges[i - 1];
-			//const auto  & vec = m->vertices[e.vid[0]].p - m->vertices[e.vid[1]].p;
-			glp_set_obj_coef(lp, i, schdules[i-1].chicken_needed);
-		}
-
+		glp_set_obj_coef(lp, i, variables[i-1]);
 	}//end i
 
 	//init ia, ja, and ar
@@ -1914,7 +2112,7 @@ bool MyPCoverPlanner::SolveLP(
 
 	int ia_id = 1;
 	row_id = 1;
-	for (auto & c : constaints)
+	for (auto & c : constraints)
 	{
 		for (auto vid : c.vids)
 		{
@@ -2086,11 +2284,9 @@ bool MyPCoverPlanner::paths2station()
   this->m_num_valid_cells=0;
   m_charging_station->path2station.push_back(m_charging_station->pos);
 
-  for(int i=0;i<m_height;i++)
+  for(auto& data : m_graph.nodes)
   {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
+      Node & n=data.data;
       if(!n.free) continue; //this node is in collision, no neighbors
       this->m_num_valid_cells++;
 
@@ -2106,8 +2302,7 @@ bool MyPCoverPlanner::paths2station()
         cerr<<"! Error: Insufficient battery power ("<<m_battery<<") to safely reach and return from some areas ("<<n.time2station<<")"<<endl;
         return false;
       }
-    }
-  }//end j
+  }
 
   return true;//everything looks good!
 }
@@ -2131,11 +2326,9 @@ void MyPCoverPlanner::display()
   //draw nodes
   SDL_Rect box; //create a rect
 
-  for(int i=0;i<m_height;i++)
+  for(auto& data : m_graph.nodes)
   {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
+      Node & n=data.data;
       if(!n.free) continue;
 
       //draw node
@@ -2147,7 +2340,8 @@ void MyPCoverPlanner::display()
       box.y = n.pos[1]-box.h/2; // controls the rect's y coordinte
 
       if(n.b_charging_station){
-        SDL_SetRenderDrawColor(renderer,0,250,0,0); //green
+        SDL_SetRenderDrawBlendMode(renderer,SDL_BLENDMODE_NONE);
+        SDL_SetRenderDrawColor(renderer,0,250,0,255); //green
         SDL_RenderFillRect(renderer,&box);
       }
       else{
@@ -2164,25 +2358,27 @@ void MyPCoverPlanner::display()
       }
 
       //draw the boundary
+      /*
       box.w=(int)(getMyGame()->getScreenWidth()*0.9f/m_width);
       box.h=(int)(getMyGame()->getScreenHeight()*0.9f/m_height);
       box.x = n.pos[0]-box.w/2;  //controls the rect's x coordinate
       box.y = n.pos[1]-box.h/2; // controls the rect's y coordinte
-      SDL_SetRenderDrawColor(renderer,50,50,100,0);
+      */
+      SDL_SetRenderDrawColor(renderer,50,50,100,255);
       SDL_RenderDrawRect(renderer,&box);
 
+
       //draw connections
-      // for(auto & N : n.neighbors)
-      // {
-      //   Node * nei = N.first;
-      //   if(n.id>nei->id) continue;
-      //   // if(n.parent==nei || nei->parent==&n)
-      //   //   SDL_SetRenderDrawColor(renderer,255,255,0,000);
-      //   // else
-      //     SDL_SetRenderDrawColor(renderer,100,100,100,000);
-      //   SDL_RenderDrawLine(renderer, n.pos[0], n.pos[1], nei->pos[0], nei->pos[1]);
-      // }
-    }
+      for(auto & N : n.neighbors)
+      {
+        Node * nei = N.first;
+        if(n.id>nei->id) continue;
+        // if(n.parent==nei || nei->parent==&n)
+        //   SDL_SetRenderDrawColor(renderer,255,255,0,000);
+        // else
+          SDL_SetRenderDrawColor(renderer,100,100,100,000);
+        SDL_RenderDrawLine(renderer, n.pos[0], n.pos[1], nei->pos[0], nei->pos[1]);
+      }
   }
 
   //draw shortest paths to each node
@@ -2211,11 +2407,34 @@ void MyPCoverPlanner::display()
   */
 }
 
+//given the position of an agent, find the closest node
 MyPCoverPlanner::Node * MyPCoverPlanner::getNode(float x, float y)
 {
-  float cell_w=getMyGame()->getScreenWidth()*1.0f/m_width;
-  float cell_h=getMyGame()->getScreenHeight()*1.0f/m_height;
+
+  float cell_w=getSensorWidth()*0.5f;
+  float cell_h=getSensorHeight()*0.5f;
+
+  /*
   return &m_grid[(int)(y/cell_h)][(int)(x/cell_w)];
+  */
+
+  //this can be very slow
+  //need to consider visibily (occlusion)
+  Point2d pos(x,y);
+  float min_d=FLT_MAX;
+  Node * ans=NULL;
+  for(auto& data : m_graph.nodes)
+  {
+    Node& node = data.data;
+    if( fabs(node.pos[0]-x)>cell_w ) continue; //too far
+    if( fabs(node.pos[1]-y)>cell_h ) continue; //too far
+    float d = (node.pos-pos).normsqr();
+    if(d<min_d){
+      min_d=d;
+      ans=&node;
+    }
+  }
+  return ans;
 }
 
 //collect nodes along the path that can be visited before the deadline
@@ -2228,10 +2447,12 @@ MyPCoverPlanner::visitedNodes(const list<Point2d>& path, float arrival_time)
 
   for(const Point2d& pos : path)
   {
-    travel_time+=(pos-pre).norm();
+    travel_time+=dist2time((pos-pre).norm());
+    //cout<<"travel_time="<<travel_time<<endl;
     if(travel_time>this->m_latency) break; //visited after latency expires...
     Node * n = getNode(pos[0],pos[1]);
     pre=pos;
+    if(n==NULL) continue;
     if(!n->free) continue;
     if(nodes.empty()) nodes.push_back(n);
     else if(nodes.back()!=n) nodes.push_back(n);
@@ -2252,22 +2473,41 @@ MyPCoverPlanner::visitedNodes(const list<Point2d>& path)
 //
 //
 
-//check if a node is pcoverd by the timed schedule (ts) with the schedules in
+//check if a node is pcoverd by the timed schedule (ts) AND the schedules in
 //n->timed_schedules
+//NOTE: this assumes that ts passese through n
 bool MyPCoverPlanner::is_pcovered
 (MyPCoverPlanner::Node * n, MyPCoverPlanner::MyTimedSchedule * ts, double& witness)
 {
-  //this can be slow....
+  auto & TT=ts->getTT();
+  if(TT.find(n)==TT.end()){
+    witness=n->latest_valid_time;
+    return false; //ts does not go through
+  }
 
   vector< pair<double, MySchedule*> > timed_schedules=n->timed_schedules;
-  {
-    const unordered_map<Node *, double> & tt=ts->getTT();
-    auto at=tt.at(n)+ts->start_time; //arrival time at node n on this schedule
+
+  //  const unordered_map<Node *, double> & tt=ts->getTT();
+  for(double tt : TT.at(n)){
+    auto at=tt+ts->start_time; //arrival time at node n on this schedule
+    //cout<<">> at="<<at<<" n latest="<<n->latest_valid_time<<endl;
     timed_schedules.push_back({at,ts});
   }
 
-  //
-  sort(timed_schedules.begin(),timed_schedules.end());
+  //this can be slow....
+  //sort(timed_schedules.begin(),timed_schedules.end());
+  //cout<<"work with ts start="<<ts->start_time<<" at="<<at<<
+  //" last="<<timed_schedules.back().first<<endl;
+
+  // if(timed_schedules.front().second->duration > 1e10)
+  // {
+  //   auto tmp=timed_schedules.front().second;
+  //   auto tmp2=n->timed_schedules.front().second;
+  //   cerr<<"-> corrupted: "<<tmp->duration<<endl;
+  //   cerr<<"-> corrupted2: "<<tmp2->duration<<endl;
+  //   exit(1);
+  // }
+
 
   //
   return is_pcovered(n,timed_schedules,witness);
@@ -2277,6 +2517,7 @@ bool MyPCoverPlanner::is_pcovered
 //assume n->timed_schedules is sorted by arrival time
 bool MyPCoverPlanner::is_pcovered(MyPCoverPlanner::Node * n, double& witness)
 {
+  sort(n->timed_schedules.begin(),n->timed_schedules.end());
   return is_pcovered(n,n->timed_schedules, witness);
 }
 
@@ -2287,25 +2528,81 @@ bool MyPCoverPlanner::is_pcovered
  vector< pair<double, MyPCoverPlanner::MySchedule*> >& timed_schedules,
  double& witness)
 {
-  auto it=n->timed_schedules.begin();
+  vector< pair<double, MyPCoverPlanner::MySchedule*> > all_ts=timed_schedules;
+
+  //debug
+  for(auto & tmp : timed_schedules){
+    if(tmp.second->duration>1e10)
+    {
+        cerr<<"corrupted: "<<tmp.second->duration<<endl;
+        exit(1);
+    }
+  }
+
+  //
+  int N=2;
+  for(int i=1;i<N;i++)
+    for(auto & tmp : timed_schedules)
+      all_ts.push_back({tmp.first+(tmp.second->duration+ m_charging)*i, tmp.second});
+
+  sort(all_ts.begin(),all_ts.end());
+
+  auto it=all_ts.begin();
+  if(it->first>n->latest_valid_time){ //arrived after the deadline
+    witness=n->latest_valid_time;
+    //if(n->id==11) cout<<"not pcovered A ["<<n->id<<"]"<<endl;
+    return false;
+  }
+
   auto next=it; next++;
-  for(;next!=n->timed_schedules.end();next++)
+  //for(;next!=all_ts.end();next++)
+  int size=timed_schedules.size();
+  for(int i=0;i<size;next++, i++)
   {
     double delta=next->first-it->first;
     if(delta>m_latency){
       witness=it->first+m_latency; //the first time latency constraint is violated
+      //cout<<"not pcovered B ["<<n->id<<"] delta="<<delta<<endl;
       return false;
     }
     it=next;
   }
 
+/*
   auto& ts1=timed_schedules.front();
-  auto& tsn=n->timed_schedules.back();
+  auto& tsn=timed_schedules.back();
   double delta=ts1.first + ts1.second->duration + m_charging - tsn.first;
+
+  if(ts1.second->duration>1e10)
+  {
+      cerr<<"corrupted: "<<ts1.second->duration<<":"<<tsn.second->duration<<endl;
+      exit(1);
+  }
+
   if(delta>m_latency){
     witness=m_latency+tsn.first; //the first time latency constraint is violated
+    //if(n->id==11) cout<<"not pcovered C ["<<n->id<<"] delta="<<delta<<endl;
     return false;
   }
+
+  if(delta<0){
+    cerr<<"! ERROR: the last schedule overs with the first schedule for node "<<n->id<<endl;
+    cout<<"arrival times: ";
+    for(auto& tmp : timed_schedules)
+    {
+        cout<<tmp.first<<" ";
+    }
+    cout<<endl;
+    cout<<"next  times: ";
+    for(auto& tmp : timed_schedules)
+    {
+        cout<<tmp.first+tmp.second->duration + m_charging<<" ";
+    }
+    cout<<endl;
+
+    exit(1);
+  }
+*/
 
   return true;
 }
@@ -2445,11 +2742,9 @@ int MyPCoverPlanner::SolveLP(vector<MyTimedSchedule>& opt)
   map<Node::PCover, int> node_pcovers;  //variables #2
   list<Node *> nodes;
 
-  for(int i=0;i<m_height;i++)
+  for(auto& data : m_graph.nodes)
   {
-    for(int j=0;j<m_width;j++)
-    {
-      Node & n=m_grid[i][j];
+      Node & n=data.data;
       if(!n.free) continue; //this node is in collision, no neighbors
       build_pcovers_from_timed_schedules(&n);
       nodes.push_back(&n);
@@ -2464,8 +2759,8 @@ int MyPCoverPlanner::SolveLP(vector<MyTimedSchedule>& opt)
         }
         //cout<<endl;
       }
-    }//end for j
-  }//end for i
+  }
+
   int ts_size = timed_schedules.size();
   int schedule_id=0;
   for(auto & ts : timed_schedules) ts.second=schedule_id++;
@@ -2654,17 +2949,45 @@ MyPCoverPlanner::schedule2timedschedules
 
     int chicken_needed=schedule.chicken_needed;
     schedule.chicken_needed=1;
-    double cur_time=drand48()*0.01;
+    double cur_time=0; //drand48()*0.01;
     schedule.start_time=cur_time;
 
-    cout<<"schedule.start_time="<<schedule.start_time<<endl;
-    Node * pre=NULL;
+    //first node and first pos
+    Node * pre=NULL; //getNode(schedule.front());
+    Point2d pre_pos=schedule.front();
 
+//cout<<"timed schedule="<<flush;
     //create the first timed schedule
     list<Node *> no_repeats;
-    for(Node * n : schedule.nodes)
+    //double cur_time2=0;
+    //double cur_time3=0;
+
+    double dist=0;
+
+    for(Point2d & pos : schedule)
     {
-      if(pre==n) continue;
+      //cout<<"pos="<<pos<<" pre="<<pre_pos<<endl;
+
+      //Node * n : schedule.nodes
+      dist+=(pos-pre_pos).norm();
+      //cur_time+= dist2time( (pos-pre_pos).norm() );
+      cur_time=dist2time(dist);
+
+      Node * n = getNode(pos[0], pos[1]);
+      pre_pos=pos;
+
+      if(n==NULL || pre==n) continue;
+
+      // if(pre!=NULL){
+      //   float w=getWeight_no_exit(pre, n);
+      //   if(w==-FLT_MAX){
+      //     w=dist2time( (pre->pos-n->pos).norm() );
+      //   }
+      //   cur_time2+=w;
+      // }
+      //cout<<"cur_time="<<cur_time<<" cur_time2="<<cur_time2<<" cur_time3="<<cur_time3<<endl;
+//cout<<n->id<<"("<< cur_time <<")->"<<flush;
+      /*
       if(pre!=NULL){
         float w=getWeight_no_exit(pre, n);
         if(w==-FLT_MAX){
@@ -2672,15 +2995,20 @@ MyPCoverPlanner::schedule2timedschedules
         }
         cur_time+=w;
       }
+      */
       no_repeats.push_back(n);
       schedule.arrival_times.push_back(cur_time);
       pre=n;
     }
+
+    //cout<<"cur_time="<<cur_time<<" duration="<<schedule.duration<<endl;
+
     schedule.nodes.swap(no_repeats);
     Tschedules.push_back(schedule);
+//cout<<endl;
 
     //create the rest of timed schedules offset by the latency
-    for(int i=1;i<=chicken_needed;i++)
+    for(int i=1;i<chicken_needed;i++)
     {
       schedule.start_time+=m_latency;
       list<double> arrival_times;
@@ -2693,16 +3021,26 @@ MyPCoverPlanner::schedule2timedschedules
 }
 
 //get travel time from the charging station
-const unordered_map<MyPCoverPlanner::Node *, double> &
+const unordered_map<MyPCoverPlanner::Node *, list<double> > &
 MyPCoverPlanner::MyTimedSchedule::getTT()
 {
   if(node2tt.empty()){
     auto atime=this->arrival_times.begin(); //travel time from the charging station along this tour
     for(Node * node : this->nodes)
     {
-      node2tt[node]=*atime;
+      node2tt[node].push_back(*atime);
       atime++;
     }
+  }
+  return node2tt;
+}
+
+const unordered_map<MyPCoverPlanner::Node *, list<double> > &
+MyPCoverPlanner::MyTimedSchedule::getTT() const
+{
+  if(node2tt.empty()){
+    cerr<<"! Error: MyPCoverPlanner::MyTimedSchedule::getTT: empty data"<<endl;
+    exit(1);
   }
   return node2tt;
 }
@@ -2780,6 +3118,26 @@ bool MyPCoverPlanner::MyFlexibleTimedSchedule::is_covered
     S+=(this->duration+charging);
   }
   return false;
+}
+
+//covert schedule to string
+std::string MyPCoverPlanner::MySchedule::to_string()
+{
+  std::stringstream ss;
+  for(Node * n : nodes) ss<<n->id<<":";
+  return ss.str();
+}
+
+
+//sensor model of the chicken
+float MyPCoverPlanner::getSensorWidth()
+{
+  return (getMyGame()->getScreenWidth()*1.0f/m_width);
+}
+
+float MyPCoverPlanner::getSensorHeight()
+{
+  return (getMyGame()->getScreenHeight()*1.0f/m_height);
 }
 
 }//end namespace GMUCS425

@@ -2,6 +2,7 @@
 
 #include "MyScene.h"
 #include "MyInterval.h"
+#include "MyGraph.h"
 #include <set>
 #include <unordered_map>
 
@@ -9,21 +10,6 @@ namespace GMUCS425
 {
 
 class MyDragonAgent;
-
-//a simple dummy graph
-class MyBasicGraph {
-
-  struct Node{
-    int id;
-    mathtool::Point2d pos;
-  };
-
-  int add_node(const mathtool::Point2d& pos){ Node n; n.pos=pos; n.id=nodes.size(); nodes.push_back(n); return n.id; }
-  void add_edge(int s, int e, float weight){ edges.push_back( make_pair(make_pair(s,e),weight)); }
-
-  vector< pair< pair<int,int>, float> > edges;
-  vector<Node> nodes;
-};
 
 //the main persistent covering planner
 class MyPCoverPlanner
@@ -33,6 +19,10 @@ public:
   struct MySchedule;      //defined later
   struct MyTimedSchedule; //defined later
 
+  friend bool build_graph_from_grid(MyPCoverPlanner& pcover, const mathtool::Point2d& start);
+  friend bool build_graph_from_txt(MyPCoverPlanner& pcover, const string& filename);
+  friend bool build_graph_from_prm(MyPCoverPlanner& pcover, const mathtool::Point2d& start);
+  
 protected:
 
   typedef mathtool::Point2d Point2d;
@@ -47,10 +37,12 @@ protected:
         visited=false;
         free=true;
         b_charging_station=false;
+        b_inspect=true; //by default we inspect all nodes
         t=0;
         time2station=dist2station=0;
         dist=FLT_MAX;
         flag=INT_MAX;
+        latest_valid_time=0;
       }
 
       int id;
@@ -65,6 +57,7 @@ protected:
       float t; //age, in milliseconds
       bool free; //is this node free of obstacles?
       bool b_charging_station;
+      bool b_inspect; //should this node be inspected persistently
 
       list< pair<Node *, float> > neighbors;
 
@@ -85,6 +78,8 @@ protected:
       //double: arrivial time at this node
       //MySchedule *: a schedule that arrived this node
       vector< pair<double, MySchedule*> > timed_schedules;
+
+      double latest_valid_time; //the lastest time that this node must be visited
 
       // a list of valid PCover for this node
       list<PCover> valid_pcovers;
@@ -118,6 +113,14 @@ public:
   struct MySchedule : public list<Point2d> //trajectory....
   {
     MySchedule(){ duration=0; chicken_needed=1; }
+    MySchedule(const MySchedule& other){
+      this->insert(this->end(), other.begin(),other.end());
+      this->nodes=other.nodes;
+      this->duration=other.duration;
+      this->chicken_needed=other.chicken_needed;
+    }
+
+    std::string to_string();
 
     list<Node *> nodes; //all nodes this schedule visits before the latency contraint
                         //is violated (assumeing all nodes start at 0)
@@ -132,13 +135,14 @@ public:
   struct MyTimedSchedule : public MySchedule
   {
     MyTimedSchedule(){ start_time=0; }
-    MyTimedSchedule(const MySchedule& schedule){
+    MyTimedSchedule(const MySchedule& schedule) : MySchedule(schedule)
+    {
       nodes=schedule.nodes;
       duration=schedule.duration;
       chicken_needed=schedule.chicken_needed;
       start_time=0;
     }
-    MyTimedSchedule(const MyTimedSchedule& schedule){
+    MyTimedSchedule(const MyTimedSchedule& schedule) : MySchedule(schedule) {
       nodes=schedule.nodes;
       duration=schedule.duration;
       chicken_needed=schedule.chicken_needed;
@@ -154,11 +158,12 @@ public:
 
     double start_time;
 
-    //get travel time from the charging station
-    const unordered_map<Node *, double> & getTT();
+    //get travel time from the charging station to each node
+    const unordered_map<Node *, list<double>> & getTT();
+    const unordered_map<Node *, list<double>> & getTT() const;
 
   private:
-    unordered_map<Node *, double> node2tt; //mapping node to traval time
+    unordered_map< Node *, list<double> > node2tt; //mapping node to traval time
   };
 
   // 2nd version of time schedule
@@ -166,7 +171,7 @@ public:
   //
   struct MyFlexibleTimedSchedule : public MyTimedSchedule
   {
-    MyFlexibleTimedSchedule(){
+    MyFlexibleTimedSchedule() {
       start_time=0;
       ///in this case the interval is invalid
     }
@@ -225,17 +230,15 @@ public:
   }
 
   virtual ~MyPCoverPlanner(){
-    m_grid.clear();
+    //m_grid.clear();
   }
-
-  virtual bool build(); //build a grid
 
   virtual void update(); //update the timmer of the grid
 
   virtual void display();
 
-  //schedule, start is the charging station
-  virtual bool schedule( const Point2d& start );
+  //the main schedule method, which calls the specific scheduler
+  virtual bool schedule( );
 
   //give a point (x,y) in screen coordinate, find the node containing the point
   Node * getNode(float x, float y);
@@ -254,6 +257,10 @@ public:
   //get computed schedules
   const vector<MySchedule> & getSchedules() const { return m_schedules; }
   const vector<MyTimedSchedule> & getTimedSchedules() const { return m_timed_schedules; }
+
+  //sensor model of the chicken
+  float getSensorWidth();
+  float getSensorHeight();
 
 protected:
 
@@ -523,25 +530,30 @@ protected:
 
   //generate constranits
   void generate_constraints( const vector<MySchedule>& schedules,  list<LP_constraints>& constraints);
+  void generate_constraints( const list<Node*> nodes, vector<MyTimedSchedule>& schedules,  list<LP_constraints>& constraints);
 
-  //find the optimal subset of schdules
-  //return the total number of chickens needed
+  //find the optimal subset of schdules that covers all the nodes
+  //return the number of chickens needed
   int SolveLP(vector<MySchedule>& schedules, vector<MySchedule>& opt);
-
-  //solve LP problem from the given schedule and constraints
-  //called by "int SolveLP" and return true is optimal solution is found
-  bool SolveLP(vector<MySchedule>& schedules,
-              list<LP_constraints>& constaints,
-              vector<float>& solution);
-
 
   //find the optimal subset of timed schdules from node pcovers
   int SolveLP(vector<MyTimedSchedule>& opt);
 
   //check if proposed_ts to conver all nodes in "nodes"
   int SolveLP
-  (list<Node *>& nodes, const vector<MyTimedSchedule>& proposed_ts, vector<MyTimedSchedule>& opt_ts);
+  (list<Node *>& nodes, vector<MyTimedSchedule>& proposed_ts, vector<MyTimedSchedule>& opt_ts);
 
+  //solve LP problem from the given schedule and constraints
+  //return true if optimal solution is found
+  //calling SolveLP(vector<int>& variables, ...)
+  bool SolveLP(vector<MySchedule>& schedules,
+              list<LP_constraints>& constraints,
+              vector<float>& solution);
+
+  //solve LP problem from the given variables and constraints
+  //"variables" stores the weights of each variable
+  //returns true if optimal soltion is found
+  bool SolveLP(vector<int>& variables, list<LP_constraints>& constaints, vector<float>& solution);
 
   //compute a matrix represention of the graph
   typedef vector< pair<Node *, float> > TSP; //<node, time>
@@ -639,11 +651,13 @@ protected:
   //------------>
   float traceback(Node * n, list<Node *>& path);
 
-  std::vector< std::vector<Node> > m_grid; //a grid for motion planning
-  //static bool comp(Node * a, Node * b){ return a->f>b->f;}
+  //std::vector< std::vector<Node> > m_grid; //a grid for motion planning
+  MyBasicGraph<Node> m_graph; //the graph to be covered
 
   MyDragonAgent * m_agent;
   MyScene * m_scene;
+
+
   int m_width, m_height; //width and height of the grid
   int m_num_valid_cells; //number of valid cells
   float m_latency; //the latency constraint, in milliseconds

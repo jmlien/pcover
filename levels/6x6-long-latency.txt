@@ -1,7 +1,7 @@
 40 40
 seed 10
-perlin 3 3 cubic 1 0.1 blend  imgs/grass.png imgs/rock.jpeg
-method tsp_lp2
+perlin 3 3 cubic 1 0.1 blend imgs/rock-white.jpg imgs/water-white.jpg
+method hybrid
 regions 6 6
 battery  5000
 charging 11000
@@ -14,8 +14,8 @@ w imgs/brick.png 0.0 0.2
 
 Characters
 z imgs/zombie.png 0.05
-k imgs/drone.png  0.3
-d imgs/dragon.png 0.08
+k imgs/drone-0.png  0.5
+d imgs/dragon.png 0.1
 
 
 World

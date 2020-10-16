@@ -15,7 +15,9 @@ namespace GMUCS425
 
       typedef mathtool::Point2d Point2d;
 
-      MyDragonAgent(string method, float battery, float charging, float latency, int width, int height)
+      MyDragonAgent
+      (string method, float battery, float charging, float latency,
+       int width, int height, string graph_filename)
       :MyAgent(true,true)
       {
         dx=dy=0;
@@ -29,6 +31,7 @@ namespace GMUCS425
         this->pcover_grid_width=width;
         this->pcover_grid_height=height;
         this->pcover_opt_method=method;
+        this->pcover_graph_filename=graph_filename;
 
         chicken_id="k";
         chicken_scale=1.0;
@@ -46,7 +49,7 @@ namespace GMUCS425
       float pathing(const Point2d& s, const Point2d& g, list<Point2d>& path);
 
       //
-      void setChickenInfo(std::string id, float scale){ 
+      void setChickenInfo(std::string id, float scale){
         this->chicken_id=id;
         this->chicken_scale=scale;
       }
@@ -70,6 +73,7 @@ namespace GMUCS425
 
       //persistent covering related
       string pcover_opt_method;
+      string pcover_graph_filename;
       bool has_schedule;
       float battery;
       float charging_time;

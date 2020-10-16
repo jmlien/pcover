@@ -153,8 +153,8 @@ bool MyGridPathPlanner::find_path( const Point2d& start, const Point2d& goal, st
 
   Node * S=&m_grid[(int)(start[1]/cell_h)][(int)(start[0]/cell_w)];
   Node * G=&m_grid[(int)(goal[1]/cell_h)][(int)(goal[0]/cell_w)];
-  if(!S->free) cerr<<"! Error: Start point makes the agent collide with something"<<endl;
-  if(!G->free) cerr<<"! Error: Goal point makes the agent collide with something"<<endl;
+  if(!S->free) cerr<<"! Error: Start point ("<<start[0]<<","<<start[1]<<") makes the agent collide with something"<<endl;
+  if(!G->free) cerr<<"! Error: Goal point ("<<goal[0]<<","<<goal[1]<<") makes the agent collide with something"<<endl;
 
   S->visited=true;
   S->g=0;

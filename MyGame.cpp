@@ -64,7 +64,7 @@ namespace GMUCS425
 						cerr<<"ERROR: SDL_ttf could not initialize! SDL_ttf Error:  "<<TTF_GetError()<<endl;
 						success = false;
 					}
-										
+
 				}
 			}
 		}
@@ -108,6 +108,8 @@ namespace GMUCS425
 
 		//While application is running
 		const Uint8 *keys = SDL_GetKeyboardState(NULL);
+		bool paused=false;
+		int debug=0;
 		while( !quit )
 		{
 			//Handle events on queue
@@ -118,6 +120,10 @@ namespace GMUCS425
 				{
 					quit = true;
 				}
+		    else if(e.type==SDL_KEYDOWN)
+		    {
+		      if( keys[ SDL_SCANCODE_SPACE ] ) paused=!paused;
+				}
 				else
 				{
 					for(MyScene * scene : allScenes)
@@ -125,10 +131,15 @@ namespace GMUCS425
 				}
 			}
 
+			if(paused) continue; //paused
+
 			//std::cout<<"---------- UPDATE ---------- "<<std::endl;
 
 			for(MyScene * scene : allScenes) if(scene->is_active()) scene->update();
 
+			if(debug==0 && paused==false){
+				debug=1; paused=true;
+			}
 			//Clear screen
 			SDL_SetRenderDrawColor( gRenderer, 0xFF, 0xFF, 0xFF, 0xFF );
 			SDL_RenderClear( gRenderer );

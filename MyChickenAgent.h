@@ -16,6 +16,7 @@ namespace GMUCS425
 
         typedef mathtool::Point2d  Point2d;
         typedef mathtool::Vector2d Vector2d;
+        typedef mathtool::Box2d Box2d;
 
         MyChickenAgent(float battery, float charging_time, MyPCoverPlanner * pcover=NULL)
         :MyAgent(true,true)
@@ -29,6 +30,7 @@ namespace GMUCS425
           clock_started=false;
           m_time_delay=0;
           m_pcover=pcover;
+          m_angle=0;
         }
 
         MyChickenAgent(MyChickenAgent * other)
@@ -121,9 +123,11 @@ namespace GMUCS425
 
         bool left; //facing left?
 
+        float m_angle;
+
         MyPCoverPlanner * m_pcover;
 
-        mathtool::Point2d m_f_pos; //more accurate position...
+        Point2d m_f_pos; //more accurate position...
     };
 
 }//end namespace

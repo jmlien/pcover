@@ -33,7 +33,10 @@ inline bool build_graph_from_grid(MyPCoverPlanner& pcover, const mathtool::Point
       //check if the node is free of collision
       n.free = !pcover.collision_detection(n.pos);
       //cout<<"node ("<<j<<","<<i<<") is free="<<n.free<<endl;
-      if(n.free) n.id=pcover.m_graph.add_node(n);
+      if(n.free){
+        n.id=pcover.m_graph.add_node(n);
+        pcover.m_graph.nodes[n.id].data.id=n.id;
+      }
     }//end j
   }//end i
 

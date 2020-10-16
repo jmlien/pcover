@@ -1,11 +1,12 @@
 40 40
-seed 10
-perlin 3 3 cubic 1 0.1 blend imgs/rock.jpeg imgs/grass.png
-method tsp_lp2
+seed 1012
+perlin 3 3 cubic 1 0.1 blend imgs/rock-white.jpg imgs/water-white.jpg
+method hybrid
 regions 6 6
 battery  6000
 charging 12000
 latency  2500
+
 
 Objects
 b imgs/cannonball.png 0.0 0.15
@@ -14,8 +15,8 @@ w imgs/brick.png 0.0 0.2
 
 Characters
 z imgs/zombie.png 0.05
-k imgs/drone4.png  0.1
-d imgs/dragon.png 0.08
+k imgs/drone-0.png  0.5
+d imgs/dragon.png 0.1
 
 
 World
@@ -59,3 +60,49 @@ oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
 oooooooooooooooooooooooooooooooooooooooo
+
+
+
+World
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+ooooooooooooooodooooooooooooootooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+ooooooooootooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooootoooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+ooooooooooooooooooootooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+oooooooooooooooooooooooooooooooooooooooo
+
+
