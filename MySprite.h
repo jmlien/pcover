@@ -4,7 +4,7 @@
 
 #include <vector>
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 	//this is a sprite (either stationary or dynamic sprite)
@@ -62,4 +62,4 @@ namespace GMUCS425
 
 	};//end of class MyTextureManager
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

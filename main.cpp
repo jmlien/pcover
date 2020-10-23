@@ -9,9 +9,9 @@ int main( int argc, char* argv[] )
 		return 1;
 	}
 
-	GMUCS425::MyGame * game = new GMUCS425::MyGame(512,512);
+	MASC_PCOVER::MyGame * game = new MASC_PCOVER::MyGame(512,512);
 	assert(game);
-	GMUCS425::setMyGame(game);
+	MASC_PCOVER::setMyGame(game);
 
 	//Start up SDL and create window
 	if( !game->init("Persisten Covering with Energy & Latency") )

@@ -1,5 +1,5 @@
 #include "MyPerlin.h"
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 //creating perlin noise
@@ -133,4 +133,4 @@ void MyPerlin::generate(Uint32 * pixels, int width, int height, MyInterpolator *
   // }//end for h
 }
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

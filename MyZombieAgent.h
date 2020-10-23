@@ -3,7 +3,7 @@
 #include "MyAgent.h"
 #include "MyBehaviorTree.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
     class MyZombieAgent : public MyAgent
     {

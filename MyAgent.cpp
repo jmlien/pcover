@@ -5,7 +5,7 @@
 #include <sstream>
 #include "mathtool/Box.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
   void MyAgent::handle_event(SDL_Event & e)

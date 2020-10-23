@@ -4,7 +4,7 @@
 #include "mathtool/Vector.h"
 #include "mathtool/Point.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 //particles
@@ -87,4 +87,4 @@ private:
 
 };
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

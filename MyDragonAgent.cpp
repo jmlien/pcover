@@ -14,7 +14,7 @@
 
 using namespace std;
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
   void MyDragonAgent::handle_event(SDL_Event & e)

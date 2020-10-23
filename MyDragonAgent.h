@@ -3,7 +3,7 @@
 #include "MyAgent.h"
 #include "mathtool/Point.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
     class MyPathPlanner; //define in MyPathPlanner.h
     class MyPCoverPlanner; //define in MyPCoverPlanner.h

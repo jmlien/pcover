@@ -1,6 +1,6 @@
 #include "MyPhysicsEngine.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 void MyPhysicsEngine::step(float h)
@@ -107,4 +107,4 @@ void MyPhysicsEngine::euler(float h,
   }
 }
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

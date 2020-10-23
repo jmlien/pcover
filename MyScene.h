@@ -4,7 +4,7 @@
 #include "MyManager.h"
 #include "MyAgent.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
     class MyPhysicsEngine;
 

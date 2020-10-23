@@ -10,7 +10,7 @@
 
 extern int TSP_SEED;
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 bool MyScene::create( std::istream & inputfile)

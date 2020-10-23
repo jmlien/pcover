@@ -1,6 +1,6 @@
 #include "MyZombieAgent.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
   //The base class of all zombie behavior nodes
   //again, this is an abstract class because "run" is not implemented

@@ -5,7 +5,7 @@
 #include <string>
 #include <cassert>
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 // the base class of all managers
@@ -54,4 +54,4 @@ class MyManager
 };
 
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

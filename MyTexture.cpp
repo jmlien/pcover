@@ -2,7 +2,7 @@
 #include "MyGame.h"
 
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
   //blend this and other textures and create a new blended texture
   //using the given mask. Note: all textures and the mask must have
@@ -262,4 +262,4 @@ namespace GMUCS425
   }
 
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

@@ -3,7 +3,7 @@
 
 using namespace mathtool;
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 MyPathPlanner::MyPathPlanner(MyScene * scene, MyAgent * agent)
@@ -227,4 +227,4 @@ bool MyGridPathPlanner::find_path( const Point2d& start, const Point2d& goal, st
   return found;
 }
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

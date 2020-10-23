@@ -3,7 +3,7 @@
 #include "MyPCoverPlanner.h"
 
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 //build a graph from grid

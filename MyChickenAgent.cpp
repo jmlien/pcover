@@ -6,7 +6,7 @@
 
 using namespace mathtool;
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
   void MyChickenAgent::display()

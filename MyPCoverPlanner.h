@@ -6,7 +6,7 @@
 #include <set>
 #include <unordered_map>
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 class MyDragonAgent;
@@ -22,7 +22,7 @@ public:
   friend bool build_graph_from_grid(MyPCoverPlanner& pcover, const mathtool::Point2d& start);
   friend bool build_graph_from_txt(MyPCoverPlanner& pcover, const string& filename);
   friend bool build_graph_from_prm(MyPCoverPlanner& pcover, const mathtool::Point2d& start);
-  
+
 protected:
 
   typedef mathtool::Point2d Point2d;
@@ -673,4 +673,4 @@ protected:
   int getFlag(){ return PCOVER_FLAG--;}
 };
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

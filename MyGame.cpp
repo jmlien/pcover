@@ -1,6 +1,6 @@
 #include "MyGame.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 	//game singleton
 	MyGame * gGame=NULL;
@@ -174,4 +174,4 @@ namespace GMUCS425
 		SDL_Quit();
 	}
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

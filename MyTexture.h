@@ -5,7 +5,7 @@
 #include <SDL_image.h>
 #include "MyManager.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 //Texture wrapper class
@@ -115,4 +115,4 @@ public:
 
 };//end of class MyTextureManager
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

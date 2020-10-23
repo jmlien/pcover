@@ -9,7 +9,7 @@
 
 using namespace mathtool;
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 int MyPCoverPlanner::PCOVER_FLAG=INT_MAX-1;
@@ -3140,4 +3140,4 @@ float MyPCoverPlanner::getSensorHeight()
   return (getMyGame()->getScreenHeight()*1.0f/m_height);
 }
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

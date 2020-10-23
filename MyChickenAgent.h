@@ -5,7 +5,7 @@
 #include "MyPhysicsEngine.h"
 #include "mathtool/Box.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
     class MyDragonAgent;
     class MyPCoverPlanner;

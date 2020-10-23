@@ -2,7 +2,7 @@
 
 #include "MyScene.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 class MyPathPlanner
@@ -79,4 +79,4 @@ protected:
   static bool comp(Node * a, Node * b){ return a->f>b->f;}
 };
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

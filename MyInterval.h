@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 class MyInterval
@@ -73,4 +73,4 @@ inline double gap(const MyInterval& i1, const MyInterval& i2){
 	return i1.s-i2.e;
 }
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

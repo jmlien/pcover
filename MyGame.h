@@ -14,7 +14,7 @@
 #include "MyTexture.h"
 #include "MyScene.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 	class MyGame; //define later in this file
@@ -87,4 +87,4 @@ namespace GMUCS425
 		//MyFontManager m_FontManager;
 	};
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

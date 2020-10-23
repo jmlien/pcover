@@ -4,7 +4,7 @@
 #include "mathtool/Point.h"
 #include "mathtool/Box.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
     //this defines the transform of the agent
     class MyAgent

@@ -1,7 +1,7 @@
 #include "MySprite.h"
 #include "MyGame.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 	//create sprite clips using a given Texture
@@ -61,4 +61,4 @@ namespace GMUCS425
 		if(m_current_frame>=m_sprite_clips.size()) m_current_frame-=m_sprite_clips.size();
 	}
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

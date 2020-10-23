@@ -4,7 +4,7 @@
 #include "mathtool/Vector.h"
 #include <vector>
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
 class MyInterpolator
@@ -104,4 +104,4 @@ public:
 	}
 };
 
-}//end namespace GMUCS425
+}//end namespace MASC_PCOVER

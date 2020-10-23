@@ -4,7 +4,7 @@
 #include <fstream>
 #include "mathtool/Box.h"
 
-namespace GMUCS425
+namespace MASC_PCOVER
 {
 
   //
@@ -208,4 +208,4 @@ cout<<"filename="<<filename<<endl;
   return true;
 }
 
-} //namespace GMUCS425
+} //namespace MASC_PCOVER
