@@ -384,7 +384,7 @@ namespace GMUCS425
         auto j=i; j++;
         if(j==schdule.end()) continue;
         //SDL_RenderDrawLine(renderer, (*i)[0], (*i)[1], (*j)[0], (*j)[1]);
-        thickLineRGBA (renderer, (*i)[0], (*i)[1], (*j)[0], (*j)[1], 4, colors[k][0],colors[k][1],colors[k][2],255);
+        thickLineRGBA (renderer, (*i)[0], (*i)[1], (*j)[0], (*j)[1], 6, colors[k][0],colors[k][1],colors[k][2],255);
       }//end i
       k=(k+1)%10;
       //break;
