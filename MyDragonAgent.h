@@ -54,7 +54,7 @@ namespace MASC_PCOVER
         this->chicken_scale=scale;
       }
 
-    private:
+    protected:
 
       void move_to_next_waypoint();
       void pathing();
