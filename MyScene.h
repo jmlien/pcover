@@ -3,6 +3,7 @@
 #include <iostream>
 #include "MyManager.h"
 #include "MyAgent.h"
+#include <fstream>
 
 namespace MASC_PCOVER
 {
@@ -70,7 +71,24 @@ namespace MASC_PCOVER
     public:
 
     	//create a texture from file
-    	bool create(std::string name, std::string scene_file);
+      template<typename T=MyScene>
+    	bool create(std::string name, std::string scene_file)
+      {
+        std::ifstream inputfile;
+        inputfile.open(scene_file);
+
+        if (!inputfile.is_open()) // oops. there was a problem opening the file
+        {
+          std::cerr << "ERROR: FILE COULD NOT BE OPENED" << std::endl;	// Hmm. No output?
+          return false;
+        }
+
+        MyScene * level=(MyScene*)(new T());
+        assert(level);
+        if(!level->create(inputfile)) return false;
+        this->add(name,level);
+        return true;
+      }
 
       //get the first active scene
       MyScene * get_active_scene();

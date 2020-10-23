@@ -6,8 +6,6 @@
 #include "MyZombieAgent.h"
 #include "MyPhysicsEngine.h"
 
-#include <fstream>
-
 extern int TSP_SEED;
 
 namespace MASC_PCOVER
@@ -393,32 +391,23 @@ int MyScene::broad_range_collision()
 
 
 //create a texture from file
-bool MySceneManager::create(std::string name, std::string scene_file)
-{
-  std::ifstream inputfile;		// Holds a pointer into the file
-//   std::string path = __FILE__; //gets the current cpp file's path with the cpp file
-// #if WIN32
-//   path = path.substr(0,1+path.find_last_of('\\')); //removes filename to leave path
-// #else
-//   path = path.substr(0,1+path.find_last_of('/')); //removes filename to leave path
-// #endif
+// bool MySceneManager::create(std::string name, std::string scene_file)
+// {
+//   std::ifstream inputfile;
+//   inputfile.open(scene_file);
 //
-//   path+= scene_file; //if txt file is in the same directory as cpp file
-//   inputfile.open(path);
-  inputfile.open(scene_file);
-
-  if (!inputfile.is_open()) // oops. there was a problem opening the file
-  {
-    std::cerr << "ERROR: FILE COULD NOT BE OPENED" << std::endl;	// Hmm. No output?
-    return false;
-  }
-
-  MyScene * level=new MyScene();
-  assert(level);
-  if(!level->create(inputfile)) return false;
-  this->add(name,level);
-  return true;
-}
+//   if (!inputfile.is_open()) // oops. there was a problem opening the file
+//   {
+//     std::cerr << "ERROR: FILE COULD NOT BE OPENED" << std::endl;	// Hmm. No output?
+//     return false;
+//   }
+//
+//   MyScene * level=new MyScene();
+//   assert(level);
+//   if(!level->create(inputfile)) return false;
+//   this->add(name,level);
+//   return true;
+// }
 
 //get the first active scene
 MyScene * MySceneManager::get_active_scene()
